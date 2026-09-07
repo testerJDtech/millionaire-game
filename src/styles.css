@@ -1,0 +1,1418 @@
+/* ══════════════════════════════════════════════════════════════════
+   THE GOLDEN QUESTION — stylesheet
+   
+   Organised top to bottom:
+     1. Tokens          2. Reset & base      3. Buttons & shared bits
+     4. Launcher        5. Title card        6. Team select
+     7. The stage (projector)                8. Answers
+     9. Money ladder    10. Lifelines        11. Timer & bars
+    12. Result & leaderboard                13. Host panel
+    14. Responsive      15. Reduced motion
+
+   One rule for keeping this maintainable: layout spacing lives on the
+   container (.stage, .host__grid), never on the shared pieces, so the same
+   component can sit on the projector and in the host panel without the two
+   sets of margins fighting.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────── 1. TOKENS ─────────────────────────── */
+
+:root {
+  /* Base: near-black navy through deep violet */
+  --ink: #04060f;
+  --navy: #0a1235;
+  --navy-lift: #101a44;
+  --violet: #2c1c6b;
+  --violet-lit: #4a2fb5;
+
+  /* Gold, used sparingly so it still means something */
+  --gold: #f3c559;
+  --gold-deep: #b98c22;
+  --gold-faint: rgba(243, 197, 89, 0.18);
+
+  /* Verdicts */
+  --green: #17a05c;
+  --green-lit: #2fd982;
+  --red: #d32b45;
+  --red-lit: #ff5f74;
+
+  /* Text */
+  --text: #eef1ff;
+  --text-dim: #a3abd4;
+  --text-faint: #6c76a8;
+
+  /* Structure */
+  --line: rgba(160, 175, 255, 0.16);
+  --radius: 10px;
+  --speed: 300ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Type. No web fonts: the app must work with no internet, so this is a
+     cross-platform stack that has some character of its own. */
+  --face: "Trebuchet MS", "Segoe UI", Tahoma, system-ui, -apple-system, sans-serif;
+  --face-num: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+/* ────────────────────── 2. RESET & BASE ────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--face);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The house background: a pool of violet light rising from the floor. */
+#root {
+  background:
+    radial-gradient(120% 80% at 50% 118%, var(--violet-lit) 0%, transparent 55%),
+    radial-gradient(90% 70% at 50% 0%, var(--violet) 0%, transparent 60%),
+    linear-gradient(180deg, var(--ink) 0%, var(--navy) 55%, var(--ink) 100%);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+p,
+ol,
+ul {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+input,
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ──────────────── 3. BUTTONS & SHARED BITS ──────────────── */
+
+.btn {
+  padding: 0.6rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(16, 26, 68, 0.85);
+  color: var(--text);
+  font-size: 0.94rem;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--navy-lift);
+  border-color: rgba(243, 197, 89, 0.45);
+}
+
+.btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  border-color: var(--gold-deep);
+  background: linear-gradient(180deg, rgba(243, 197, 89, 0.22), rgba(185, 140, 34, 0.1));
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(243, 197, 89, 0.36), rgba(185, 140, 34, 0.16));
+}
+
+.btn--danger {
+  border-color: rgba(211, 43, 69, 0.5);
+  color: #ffc6ce;
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: rgba(211, 43, 69, 0.22);
+  border-color: var(--red);
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
+.btn--on {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.btn--small {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.btn--big {
+  padding: 0.95rem 2.4rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.btnrow--big .btn {
+  flex: 1 1 9rem;
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+}
+
+.pad {
+  min-height: 100%;
+  padding: clamp(1rem, 3vw, 3rem);
+  display: grid;
+  place-items: center;
+}
+
+.alert {
+  margin: 0.75rem clamp(0.75rem, 2vw, 1.5rem);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.alert ul {
+  margin: 0.5rem 0;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+
+.alert--error {
+  border-color: var(--red);
+  background: rgba(211, 43, 69, 0.16);
+}
+
+.alert--warn {
+  border-color: var(--gold-deep);
+  background: rgba(243, 197, 89, 0.12);
+}
+
+/* ───────────────────────── 4. LAUNCHER ───────────────────────── */
+
+.launcher {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.launcher__title {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  text-shadow: 0 0 40px rgba(243, 197, 89, 0.28);
+}
+
+.launcher__sub,
+.launcher__note {
+  color: var(--text-dim);
+  max-width: 46ch;
+  line-height: 1.6;
+}
+
+.launcher__note {
+  font-size: 0.88rem;
+  color: var(--text-faint);
+  margin-top: 0.5rem;
+}
+
+.launcher__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.launcher__card {
+  display: grid;
+  gap: 0.5rem;
+  width: 19rem;
+  padding: 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(10, 18, 53, 0.7);
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+
+.launcher__card:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+
+.launcher__cardTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.launcher__cardBody {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+/* ──────────────────────── 5. TITLE CARD ──────────────────────── */
+
+.titlecard {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* A gold ring with a question mark: the show's own mark, drawn in CSS. */
+.titlecard__crest {
+  width: clamp(80px, 9vw, 132px);
+  height: clamp(80px, 9vw, 132px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 3px solid var(--gold-deep);
+  box-shadow: 0 0 0 10px rgba(243, 197, 89, 0.06), 0 0 60px rgba(243, 197, 89, 0.3);
+  background: radial-gradient(circle at 50% 30%, var(--violet-lit), var(--ink) 70%);
+  margin-bottom: 0.8rem;
+}
+
+.titlecard__crestMark {
+  font-size: clamp(2.4rem, 4.5vw, 4rem);
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.titlecard__title {
+  font-size: clamp(2.4rem, 7vw, 5.5rem);
+  font-weight: 700;
+  line-height: 1.02;
+  color: var(--gold);
+  text-shadow: 0 0 60px rgba(243, 197, 89, 0.35);
+}
+
+.titlecard__sub {
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  color: var(--text-dim);
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+}
+
+.titlecard__prize {
+  margin-top: 1.2rem;
+  font-size: clamp(1rem, 1.8vw, 1.5rem);
+  color: var(--text);
+}
+
+.titlecard__waiting {
+  margin-top: 1.5rem;
+  color: var(--text-faint);
+  font-size: 1.05rem;
+}
+
+/* ─────────────────────── 6. TEAM SELECT ─────────────────────── */
+
+.teams {
+  width: min(1100px, 100%);
+}
+
+.teams__heading {
+  font-size: clamp(1.5rem, 3vw, 2.6rem);
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--gold);
+}
+
+.teams__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+.teams--compact .teams__list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.teamcard {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--text-faint);
+  border-radius: var(--radius);
+  background: rgba(10, 18, 53, 0.72);
+}
+
+/* The left edge encodes progress, so you can read the board at a glance. */
+.teamcard--in-progress {
+  border-left-color: var(--gold);
+}
+
+.teamcard--finished {
+  border-left-color: var(--green-lit);
+}
+
+.teams--compact .teamcard {
+  padding: 0.6rem;
+  gap: 0.35rem;
+}
+
+.teamcard__top {
+  min-width: 0;
+}
+
+.teamcard__name {
+  display: block;
+  font-size: clamp(1.05rem, 1.7vw, 1.5rem);
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+.teamcard__status {
+  letter-spacing: 0.1em;
+  font-size: 0.92em;
+}
+
+.teamcard__input {
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(4, 6, 15, 0.6);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.teamcard__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.teamcard__winnings {
+  color: var(--gold);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.teamcard__play {
+  width: 100%;
+  font-size: 0.82rem;
+  padding: 0.4rem;
+}
+
+/* ───────────────────────── 7. THE STAGE ───────────────────────── */
+
+.play {
+  position: relative;
+  height: 100vh;
+  overflow: hidden; /* no scrollbars on the projector, ever */
+}
+
+.stage {
+  position: relative;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr clamp(200px, 17vw, 290px);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "top    ladder"
+    "main   ladder"
+    "bottom ladder";
+  gap: clamp(0.5rem, 1.4vw, 1.5rem);
+  padding: clamp(0.75rem, 1.8vw, 2rem);
+}
+
+.stage__top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.stage__team {
+  font-size: clamp(1.1rem, 2vw, 1.9rem);
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.stage__qmeta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: clamp(0.8rem, 1.15vw, 1.1rem);
+  color: var(--text-dim);
+}
+
+.stage__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.stage__banked {
+  display: grid;
+  justify-items: end;
+  line-height: 1.15;
+}
+
+.stage__bankedLabel {
+  font-size: clamp(0.65rem, 0.85vw, 0.8rem);
+  color: var(--text-faint);
+  letter-spacing: 0.16em;
+}
+
+.stage__bankedValue {
+  font-size: clamp(1rem, 1.7vw, 1.6rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage__main {
+  grid-area: main;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  gap: clamp(0.75rem, 2vh, 2rem);
+  min-height: 0;
+}
+
+.qcard {
+  padding: clamp(0.9rem, 2.4vh, 2rem) clamp(1rem, 3vw, 2.5rem);
+  border: 1px solid var(--gold-faint);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(44, 28, 107, 0.7), rgba(4, 6, 15, 0.8));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.qcard__text {
+  font-size: clamp(1.25rem, 2.5vw, 2.6rem);
+  line-height: 1.25;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.stage__locked {
+  text-align: center;
+  color: var(--gold);
+  font-size: clamp(0.9rem, 1.4vw, 1.3rem);
+  letter-spacing: 0.2em;
+}
+
+.stage__ladder {
+  grid-area: ladder;
+  min-height: 0;
+  display: grid;
+  align-content: center;
+}
+
+.stage__bottom {
+  grid-area: bottom;
+  display: flex;
+  justify-content: center;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ────────────────────────── 8. ANSWERS ────────────────────────── */
+
+.answers {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.5rem, 1.2vw, 1.1rem);
+}
+
+.answer {
+  /* The angled capsule: cut corners rather than a plain pill. */
+  clip-path: polygon(
+    18px 0,
+    calc(100% - 18px) 0,
+    100% 50%,
+    calc(100% - 18px) 100%,
+    18px 100%,
+    0 50%
+  );
+  display: flex;
+  align-items: center;
+  gap: clamp(0.5rem, 1vw, 1rem);
+  width: 100%;
+  padding: clamp(0.7rem, 1.7vh, 1.3rem) clamp(1.2rem, 2.2vw, 2.2rem);
+  border: 0;
+  background: linear-gradient(180deg, rgba(16, 26, 68, 0.95), rgba(4, 6, 15, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(160, 175, 255, 0.28);
+  color: var(--text);
+  text-align: left;
+  font-size: clamp(0.95rem, 1.6vw, 1.7rem);
+  transition: background var(--speed) var(--ease), box-shadow var(--speed) var(--ease),
+    color var(--speed) var(--ease);
+}
+
+.answer__letter {
+  flex: 0 0 auto;
+  min-width: 1.2em;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.answer__text {
+  flex: 1 1 auto;
+  line-height: 1.2;
+}
+
+/* Selected: the host has picked it, nothing is decided yet. */
+.answer--selected {
+  background: linear-gradient(180deg, rgba(74, 47, 181, 0.9), rgba(44, 28, 107, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(243, 197, 89, 0.6);
+}
+
+/* Locked: final answer, in gold, holding the room. */
+.answer--locked {
+  background: linear-gradient(180deg, rgba(243, 197, 89, 0.9), rgba(185, 140, 34, 0.85));
+  box-shadow: inset 0 0 0 1px var(--gold), 0 0 40px rgba(243, 197, 89, 0.35);
+  color: var(--ink);
+}
+
+.answer--locked .answer__letter {
+  color: var(--ink);
+}
+
+.answer--correct {
+  background: linear-gradient(180deg, rgba(47, 217, 130, 0.9), rgba(23, 160, 92, 0.9));
+  box-shadow: inset 0 0 0 1px var(--green-lit), 0 0 46px rgba(47, 217, 130, 0.42);
+  color: var(--ink);
+}
+
+.answer--correct .answer__letter {
+  color: var(--ink);
+}
+
+.answer--wrong {
+  background: linear-gradient(180deg, rgba(255, 95, 116, 0.85), rgba(211, 43, 69, 0.9));
+  box-shadow: inset 0 0 0 1px var(--red-lit), 0 0 40px rgba(211, 43, 69, 0.4);
+}
+
+/* Removed by 50:50: the capsule stays so the layout never jumps. */
+.answer--removed {
+  background: rgba(4, 6, 15, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(160, 175, 255, 0.1);
+  color: transparent;
+}
+
+.answer--removed .answer__letter {
+  color: rgba(160, 175, 255, 0.22);
+}
+
+.answer--compact {
+  padding: 0.5rem 1rem;
+  font-size: 0.92rem;
+}
+
+button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):not(.answer--wrong) {
+  background: linear-gradient(180deg, rgba(74, 47, 181, 0.7), rgba(16, 26, 68, 0.95));
+  cursor: pointer;
+}
+
+/* ─────────────────────── 9. MONEY LADDER ─────────────────────── */
+
+.ladder {
+  display: grid;
+  gap: clamp(1px, 0.35vh, 5px);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--face-num);
+}
+
+.ladder__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: clamp(0.2rem, 0.75vh, 0.5rem) clamp(0.5rem, 1vw, 0.9rem);
+  border-radius: 6px;
+  font-size: clamp(0.72rem, 1.15vw, 1.15rem);
+  color: var(--text-faint);
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+
+.ladder__num {
+  flex: 0 0 1.4em;
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+.ladder__value {
+  flex: 1 1 auto;
+  text-align: right;
+  font-weight: 600;
+}
+
+.ladder__row--banked {
+  color: rgba(243, 197, 89, 0.62);
+}
+
+/* The current prize is the loudest thing on the ladder, by some margin. */
+.ladder__row--current {
+  background: linear-gradient(90deg, rgba(243, 197, 89, 0.14), rgba(243, 197, 89, 0.32));
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--gold), 0 0 26px rgba(243, 197, 89, 0.3);
+}
+
+.ladder__row--current .ladder__value {
+  color: var(--ink);
+  font-size: 1.1em;
+}
+
+.ladder__row--current .ladder__num {
+  color: var(--ink);
+  opacity: 0.75;
+}
+
+/* A safety-net rung gets a gold edge, so the guaranteed money is visible. */
+.ladder__row--net {
+  border-left: 3px solid var(--gold-deep);
+}
+
+.ladder--compact .ladder__row {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+}
+
+/* ──────────────────────── 10. LIFELINES ──────────────────────── */
+
+.lifelines {
+  display: flex;
+  gap: clamp(0.6rem, 2vw, 2.5rem);
+  align-items: center;
+}
+
+.lifeline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid rgba(243, 197, 89, 0.45);
+  border-radius: 999px;
+  font-size: clamp(0.72rem, 1vw, 1rem);
+  color: var(--gold);
+  transition: opacity var(--speed) var(--ease);
+}
+
+.lifeline__glyph {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.lifeline__label {
+  white-space: nowrap;
+}
+
+/* Used: struck through and faded, so it reads as spent from the back row. */
+.lifeline--used {
+  border-color: var(--line);
+  color: var(--text-faint);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.lifelines--compact {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lifelines--compact .lifeline {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+/* ─────────────────── 11. TIMER & AUDIENCE BARS ─────────────────── */
+
+.overlay {
+  position: absolute;
+  z-index: 5;
+  animation: rise var(--speed) var(--ease);
+}
+
+.overlay--timer {
+  bottom: clamp(3.5rem, 8vh, 6rem);
+  left: clamp(1rem, 3vw, 3rem);
+}
+
+.overlay--bars {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.timer {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 1rem 1.6rem;
+  border: 1px solid var(--gold-deep);
+  border-radius: 14px;
+  background: rgba(4, 6, 15, 0.92);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.timer__label {
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+
+.timer__count {
+  font-size: clamp(2.2rem, 5vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.timer__track {
+  width: clamp(120px, 14vw, 210px);
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(160, 175, 255, 0.16);
+  overflow: hidden;
+}
+
+.timer__fill {
+  height: 100%;
+  background: var(--gold);
+  transition: width 1s linear;
+}
+
+.timer--warning .timer__count,
+.timer--warning .timer__label {
+  color: var(--red-lit);
+}
+
+.timer--warning .timer__fill {
+  background: var(--red-lit);
+}
+
+.timer--finished {
+  border-color: var(--red);
+}
+
+.timer--finished .timer__count {
+  color: var(--red-lit);
+}
+
+.timer--compact {
+  margin-top: 0.75rem;
+  padding: 0.6rem 1rem;
+}
+
+.timer--compact .timer__count {
+  font-size: 1.8rem;
+}
+
+.bars {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.4rem 1.8rem;
+  border: 1px solid var(--gold-faint);
+  border-radius: 16px;
+  background: rgba(4, 6, 15, 0.94);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.bars__title {
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+}
+
+.bars__row {
+  display: flex;
+  gap: clamp(0.8rem, 2vw, 2rem);
+  align-items: end;
+}
+
+.bar {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+}
+
+.bar__value {
+  font-size: clamp(0.85rem, 1.2vw, 1.1rem);
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar__track {
+  display: flex;
+  align-items: end;
+  width: clamp(38px, 4.5vw, 64px);
+  height: clamp(120px, 22vh, 240px);
+  border-radius: 6px;
+  background: rgba(160, 175, 255, 0.1);
+  overflow: hidden;
+}
+
+.bar__fill {
+  width: 100%;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  transition: height 900ms var(--ease);
+}
+
+.bar__letter {
+  font-size: clamp(0.9rem, 1.3vw, 1.2rem);
+  font-weight: 700;
+}
+
+.bars--compact .bar__track {
+  height: 90px;
+  width: 34px;
+}
+
+/* ───────────────── 12. RESULT & LEADERBOARD ───────────────── */
+
+.result {
+  height: 100vh;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.result__kicker {
+  font-size: clamp(0.85rem, 1.4vw, 1.2rem);
+  letter-spacing: 0.28em;
+  color: var(--text-dim);
+}
+
+.result__name {
+  font-size: clamp(1.8rem, 4.5vw, 3.6rem);
+  color: var(--gold);
+}
+
+.result__money {
+  font-size: clamp(2.6rem, 9vw, 7rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 70px rgba(243, 197, 89, 0.35);
+}
+
+.result__detail {
+  color: var(--text-dim);
+  margin-top: 0.75rem;
+}
+
+.board {
+  width: min(1000px, 100%);
+}
+
+.board__head {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.board__title {
+  font-size: clamp(1.6rem, 4vw, 3.2rem);
+  color: var(--gold);
+}
+
+.board__winner {
+  margin-top: 0.5rem;
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  color: var(--text-dim);
+}
+
+.board__list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.board__row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: clamp(0.6rem, 1.4vh, 1.1rem) clamp(0.75rem, 1.5vw, 1.4rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(10, 18, 53, 0.72);
+}
+
+.board__row--first {
+  border-color: var(--gold);
+  background: linear-gradient(90deg, rgba(243, 197, 89, 0.16), rgba(10, 18, 53, 0.72));
+  box-shadow: 0 0 40px rgba(243, 197, 89, 0.18);
+}
+
+.board__rank {
+  font-size: clamp(1.1rem, 2vw, 1.8rem);
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.board__name {
+  font-size: clamp(1rem, 1.8vw, 1.5rem);
+  font-weight: 700;
+}
+
+.board__note {
+  font-size: clamp(0.7rem, 1vw, 0.9rem);
+  color: var(--text-faint);
+}
+
+.board__money {
+  font-size: clamp(1rem, 2vw, 1.7rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.board--compact .board__row {
+  padding: 0.4rem 0.6rem;
+}
+
+.board--compact .board__note {
+  display: none;
+}
+
+/* ─────────────────── 13. HOST PANEL & TOOLS ─────────────────── */
+
+.playtools {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0.14;
+  transition: opacity var(--speed) var(--ease);
+}
+
+/* Out of the way during the show; there when you reach for it. */
+.playtools:hover {
+  opacity: 1;
+}
+
+.playtools__btn {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(4, 6, 15, 0.8);
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.playtools__hint {
+  font-size: 0.72rem;
+  color: var(--gold);
+}
+
+.host {
+  min-height: 100%;
+  padding-bottom: 2rem;
+}
+
+.host__bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.8rem clamp(0.75rem, 2vw, 1.5rem);
+  border-bottom: 1px solid var(--line);
+  background: rgba(4, 6, 15, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.host__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.host__role {
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  color: var(--text-faint);
+}
+
+.host__barRight {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.host__grid {
+  display: grid;
+  grid-template-columns: 20rem minmax(0, 1fr) 15rem;
+  gap: 1rem;
+  padding: 1rem clamp(0.75rem, 2vw, 1.5rem);
+  align-items: start;
+}
+
+.host__col {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  align-content: start;
+}
+
+/* The live question is where the host's eyes live, so it gets the biggest
+   type in the panel. */
+.host__col--main .panel {
+  background: rgba(10, 18, 53, 0.8);
+}
+
+.host__col--main .hostq {
+  font-size: 1.2rem;
+}
+
+.panel {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(10, 18, 53, 0.6);
+}
+
+.panel--idle {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.panel__title {
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  color: var(--text-faint);
+  margin-bottom: 0.75rem;
+}
+
+.panel__note {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+  margin-top: 0.6rem;
+}
+
+.live {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.live__team {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.live__q {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.live__phase {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+}
+
+.hostq {
+  margin: 0.9rem 0;
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.key {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.9rem;
+  border-left: 3px solid var(--green-lit);
+  border-radius: 4px;
+  background: rgba(23, 160, 92, 0.14);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.key strong {
+  font-size: 1rem;
+  letter-spacing: 0;
+  color: var(--green-lit);
+}
+
+.answers--host {
+  gap: 0.5rem;
+}
+
+.money {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.money strong {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict {
+  margin-top: 0.8rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.verdict--correct {
+  background: rgba(23, 160, 92, 0.2);
+  color: var(--green-lit);
+}
+
+.verdict--wrong {
+  background: rgba(211, 43, 69, 0.2);
+  color: var(--red-lit);
+}
+
+.askpanel {
+  margin-top: 0.9rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.askpanel__inputs {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.askfield {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  font-size: 0.8rem;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.askfield input {
+  width: 4.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(4, 6, 15, 0.7);
+  color: var(--text);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.asktotal {
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.asktotal--ok {
+  color: var(--green-lit);
+}
+
+.asktotal--off {
+  color: var(--gold);
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.slider input {
+  flex: 1 1 auto;
+  accent-color: var(--gold);
+}
+
+.slider__value {
+  font-variant-numeric: tabular-nums;
+  min-width: 2.6em;
+  text-align: right;
+}
+
+.keys {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.keys li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-dim);
+}
+
+.keys kbd {
+  flex: 0 0 4.4rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(4, 6, 15, 0.7);
+  font-family: var(--face-num);
+  font-size: 0.72rem;
+  text-align: center;
+  color: var(--text);
+}
+
+/* ───────────────────────── 14. RESPONSIVE ───────────────────────── */
+
+/* Host panel folds to two columns, then one, on smaller laptops. */
+@media (max-width: 1500px) {
+  .host__grid {
+    grid-template-columns: 19rem minmax(0, 1fr);
+  }
+
+  .host__col--side {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 950px) {
+  .host__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .host__col--side {
+    grid-column: auto;
+  }
+}
+
+/* Projector view: on a narrow or portrait screen the ladder moves under
+   the answers, as specified. */
+@media (max-width: 1000px), (max-aspect-ratio: 4/5) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto auto;
+    grid-template-areas:
+      "top"
+      "main"
+      "ladder"
+      "bottom";
+  }
+
+  .stage__ladder {
+    overflow: hidden;
+  }
+
+  .ladder {
+    grid-template-columns: repeat(5, 1fr);
+    grid-auto-flow: column;
+  }
+
+  .ladder__row {
+    justify-content: center;
+    gap: 0.3rem;
+  }
+
+  .ladder__value {
+    text-align: center;
+    font-size: 0.9em;
+  }
+}
+
+@media (max-width: 700px) {
+  .answers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ──────────────────── 15. REDUCED MOTION ──────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
