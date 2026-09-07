@@ -1,4 +1,6 @@
+import { motion } from 'framer-motion';
 import { settings } from '../data/settings.js';
+import { timerFill } from '../utils/motion.js';
 
 /**
  * Phone a Friend countdown. Shown on both screens.
@@ -6,6 +8,10 @@ import { settings } from '../data/settings.js';
  * The number itself lives in game state and is counted down by the host
  * window, so the projector can never drift out of step — and a refresh
  * picks up on the same second.
+ *
+ * The bar drains continuously across each of those seconds so the eye sees
+ * time running out, not a bar stepping down once a second. It scales rather
+ * than resizes, which keeps it off the layout path and on the GPU.
  */
 export default function PhoneTimer({ phone, compact }) {
   const seconds = phone.secondsLeft === null ? settings.phoneTimerSeconds : phone.secondsLeft;
@@ -31,7 +37,12 @@ export default function PhoneTimer({ phone, compact }) {
       </div>
       <div className="timer__count">{seconds}</div>
       <div className="timer__track">
-        <div className="timer__fill" style={{ width: `${fraction * 100}%` }} />
+        <motion.div
+          className="timer__fill"
+          initial={false}
+          animate={{ scaleX: fraction }}
+          transition={timerFill.transition}
+        />
       </div>
     </div>
   );

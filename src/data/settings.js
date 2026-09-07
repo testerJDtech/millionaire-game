@@ -58,10 +58,26 @@ export const settings = {
    */
   phoneTimerHideAfterSeconds: 3,
 
-  /** Audio. Drop your own files into public/audio using these exact names. */
+  /**
+   * AUDIO
+   *
+   * Filenames, per-sound levels and ducking live in src/data/audioManifest.js
+   * — one row per moment in the show. What's here is the behaviour around
+   * them: starting levels for the host's sliders, and the timing of the two
+   * sequences that are more than a single sound.
+   */
   audio: {
     enabled: true,
+
+    /* Starting positions for the host's three sliders. Adjustable on the
+       night from the Sound panel, and remembered between sessions. */
+    /* Music sits at full on its bus so the top-prize cue has clear headroom
+       above the safety-net sting — the beds are kept quiet by their own
+       levels in the manifest, not by pulling this down. */
     masterVolume: 0.7,
+    musicVolume: 1,
+    sfxVolume: 1,
+
     /**
      * Which window outputs sound by default.
      *  'host' — the laptop window (recommended: it has definitely been clicked,
@@ -70,61 +86,39 @@ export const settings = {
      *  'none' — silent until you press the sound button in a window
      */
     defaultOutput: 'host',
+  },
 
-    /**
-     * SOUND EFFECTS — ONE SLOT PER MOMENT IN THE GAME
-     * ───────────────────────────────────────────────
-     * Drop a file into public/audio and point the slot at it. Every slot is
-     * optional: leave it as-is with no file present, or set it to null, and
-     * that moment simply plays nothing. Nothing here can break the game.
-     *
-     * The right-hand column is exactly what triggers the sound.
-     */
-    files: {
-      /* — Opening — */
-      intro: 'audio/intro.mp3', //          "Start show" pressed (title → pair select)
-      teamTakesSeat: 'audio/team-seat.mp3', // a pair is put in the chair
+  /**
+   * THE £1,000,000 QUESTION
+   *
+   * The last question gets an introduction rather than just appearing. The
+   * board clears, the room gets a moment of near-silence, the value comes up
+   * on its own, and the final bed creeps in underneath it before the question
+   * and answers arrive.
+   *
+   * Set `present: false` to skip all of it and play question 10 like any
+   * other. Times are in milliseconds.
+   */
+  finalQuestion: {
+    present: true,
+    /** Quiet after the previous audio fades, before anything appears. */
+    silenceMs: 1100,
+    /** How slowly bedFinal comes up. Long on purpose — it should creep. */
+    bedRiseMs: 3000,
+    /** Total time the value card holds before the question comes in. */
+    holdMs: 4200,
+  },
 
-      /* — Each question — */
-      questionStart: 'audio/question-start.mp3', // a new question comes up
-      bed: 'audio/question-bed.mp3', //     loops under the question (see bedByQuestion)
-      lockIn: 'audio/lock-in.mp3', //       "Lock in" — final answer
-      correct: 'audio/correct.mp3', //      right answer revealed
-      wrong: 'audio/wrong.mp3', //          wrong answer revealed
-      safetyNet: 'audio/safety-net.mp3', // right answer that banks a safety net
-      //                                    (falls back to `correct` if missing)
-
-      /* — Lifelines — */
-      fiftyFifty: 'audio/fifty-fifty.mp3', //     50:50 used, two answers vanish
-      phoneRing: 'audio/phone-ring.mp3', //       Phone a Friend timer started
-      phoneWarning: 'audio/phone-warning.mp3', // phoneWarningAtSeconds reached
-      phoneTimeUp: 'audio/phone-timeup.mp3', //   phone timer hits zero
-      askAudience: 'audio/ask-audience.mp3', //   audience vote opened
-      audienceResults: 'audio/audience-results.mp3', // the bars go up on screen
-
-      /* — Endings — */
-      walkAway: 'audio/walk-away.mp3', //   pair walks away with the money
-      win: 'audio/win.mp3', //              top prize taken
-      leaderboard: 'audio/leaderboard.mp3', // final leaderboard shown
-    },
-
-    /**
-     * PER-QUESTION BEDS (optional — this is the big one for a real feel)
-     * The show uses a different, tenser loop as the money climbs. Give this
-     * an array of 10 files, one per question, and the bed changes as they go.
-     * Set it to null (or delete it) to use the single `files.bed` throughout.
-     * A short array is fine — the last entry covers every question beyond it.
-     */
-    bedByQuestion: null,
-    // bedByQuestion: [
-    //   'audio/bed-q1.mp3',  'audio/bed-q2.mp3',  'audio/bed-q3.mp3',
-    //   'audio/bed-q4.mp3',  'audio/bed-q5.mp3',  'audio/bed-q6.mp3',
-    //   'audio/bed-q7.mp3',  'audio/bed-q8.mp3',  'audio/bed-q9.mp3',
-    //   'audio/bed-q10.mp3',
-    // ],
-
-    /** Question-bed loop volume, relative to master. */
-    bedVolume: 0.35,
+  /**
+   * SAFETY-NET MOMENTS (questions 4 and 8)
+   *
+   * A banked safety net gets held for a beat: the verdict lands a moment
+   * later than usual, the ladder rung it just guaranteed pulses, and the
+   * bed drops right down so the achievement sting has the room to itself.
+   */
+  safetyNetMoment: {
+    /** Pause before the answers turn green, so the room leans in first. */
+    revealHoldMs: 550,
   },
 
   /** Animation length in ms. Kept short so hosting never feels sluggish. */

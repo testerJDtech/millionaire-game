@@ -44,8 +44,16 @@
   /* Structure */
   --line: rgba(160, 175, 255, 0.16);
   --radius: 10px;
+
+  /* Motion. These mirror utils/motion.js — CSS handles hover, focus and the
+     colour/glow changes; Framer handles anything that moves or sequences.
+     Keep the two in step so the app never feels like two different apps. */
   --speed: 300ms;
-  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --speed-fast: 180ms;
+  --speed-reveal: 500ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1); /* out */
+  --ease-in: cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
 
   /* Type. No web fonts: the app must work with no internet, so this is a
      cross-platform stack that has some character of its own. */
@@ -116,7 +124,9 @@ button {
   color: var(--text);
   font-size: 0.94rem;
   cursor: pointer;
-  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
+  /* Hover and focus stay short: a control should answer, not perform. */
+  transition: background var(--speed-fast) var(--ease),
+    border-color var(--speed-fast) var(--ease), opacity var(--speed-fast) var(--ease);
 }
 
 .btn:hover:not(:disabled) {
@@ -450,6 +460,19 @@ button {
   overflow: hidden; /* no scrollbars on the projector, ever */
 }
 
+/**
+ * One screen per layer, stacked. Both the outgoing and incoming screens are
+ * mounted for the length of the crossfade, so they have to share the same
+ * space rather than push each other around — hence absolute, not flow.
+ */
+.screenlayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* Its own compositor layer: the fade never repaints the screen underneath. */
+  will-change: opacity, transform;
+}
+
 .stage {
   position: relative;
   height: 100vh;
@@ -516,10 +539,18 @@ button {
 .stage__main {
   grid-area: main;
   display: grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto;
   align-content: center;
   gap: clamp(0.75rem, 2vh, 2rem);
   min-height: 0;
+}
+
+/* Question and answers travel together when the question changes, so they
+   share one wrapper. Same gap as the row it replaced, so nothing moves. */
+.stage__qblock {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: clamp(0.75rem, 2vh, 2rem);
 }
 
 .qcard {
@@ -536,6 +567,42 @@ button {
   line-height: 1.25;
   font-weight: 600;
   text-wrap: balance;
+}
+
+/**
+ * THE £1,000,000 CARD
+ * What the room looks at during the build-up: the value, and nothing else.
+ * No question, no answers, no clue what's coming — that's the point.
+ */
+.finalcard {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: clamp(0.5rem, 1.5vh, 1.2rem);
+  padding: clamp(1.5rem, 5vh, 4rem);
+  text-align: center;
+}
+
+.finalcard__kicker {
+  font-size: clamp(0.8rem, 1.4vw, 1.2rem);
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  color: var(--text-dim);
+}
+
+.finalcard__value {
+  font-size: clamp(3rem, 11vw, 9rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 90px rgba(243, 197, 89, 0.45);
+}
+
+.finalcard__note {
+  font-size: clamp(0.9rem, 1.6vw, 1.4rem);
+  letter-spacing: 0.2em;
+  color: var(--text-faint);
 }
 
 .stage__locked {
@@ -589,8 +656,11 @@ button {
   color: var(--text);
   text-align: left;
   font-size: clamp(0.95rem, 1.6vw, 1.7rem);
-  transition: background var(--speed) var(--ease), box-shadow var(--speed) var(--ease),
-    color var(--speed) var(--ease);
+  /* Colour, edge and glow are CSS's job here; the entrance, the lock-in pulse
+     and the wrong-answer shake are Framer's (see utils/motion.js). They never
+     touch the same properties, so they can't fight over the element. */
+  transition: background var(--speed) var(--ease-inout),
+    box-shadow var(--speed) var(--ease-inout), color var(--speed) var(--ease-inout);
 }
 
 .answer__letter {
@@ -611,30 +681,63 @@ button {
   box-shadow: inset 0 0 0 1px rgba(243, 197, 89, 0.6);
 }
 
-/* Locked: final answer, in gold, holding the room. */
+/* Locked: final answer, in gold, holding the room.
+   The glow swells and settles once — the Framer pulse moves the capsule, this
+   moves the light around it. Together they read as one gesture. */
 .answer--locked {
   background: linear-gradient(180deg, rgba(243, 197, 89, 0.9), rgba(185, 140, 34, 0.85));
   box-shadow: inset 0 0 0 1px var(--gold), 0 0 40px rgba(243, 197, 89, 0.35);
   color: var(--ink);
+  animation: lockGlow 650ms var(--ease-inout);
+}
+
+@keyframes lockGlow {
+  0% {
+    box-shadow: inset 0 0 0 1px var(--gold), 0 0 10px rgba(243, 197, 89, 0.15);
+  }
+  55% {
+    box-shadow: inset 0 0 0 1px var(--gold), 0 0 70px rgba(243, 197, 89, 0.6);
+  }
+  100% {
+    box-shadow: inset 0 0 0 1px var(--gold), 0 0 40px rgba(243, 197, 89, 0.35);
+  }
 }
 
 .answer--locked .answer__letter {
   color: var(--ink);
 }
 
+/* Right: gold gives way to green over half a second, with the glow blooming
+   a little past its resting brightness on the way. */
 .answer--correct {
   background: linear-gradient(180deg, rgba(47, 217, 130, 0.9), rgba(23, 160, 92, 0.9));
   box-shadow: inset 0 0 0 1px var(--green-lit), 0 0 46px rgba(47, 217, 130, 0.42);
   color: var(--ink);
+  transition-duration: var(--speed-reveal);
+  animation: correctGlow 900ms var(--ease-inout);
+}
+
+@keyframes correctGlow {
+  0% {
+    box-shadow: inset 0 0 0 1px var(--gold), 0 0 20px rgba(243, 197, 89, 0.3);
+  }
+  45% {
+    box-shadow: inset 0 0 0 1px var(--green-lit), 0 0 90px rgba(47, 217, 130, 0.7);
+  }
+  100% {
+    box-shadow: inset 0 0 0 1px var(--green-lit), 0 0 46px rgba(47, 217, 130, 0.42);
+  }
 }
 
 .answer--correct .answer__letter {
   color: var(--ink);
 }
 
+/* Wrong: the colour change is quick and flat. No bloom — the shake carries it. */
 .answer--wrong {
   background: linear-gradient(180deg, rgba(255, 95, 116, 0.85), rgba(211, 43, 69, 0.9));
   box-shadow: inset 0 0 0 1px var(--red-lit), 0 0 40px rgba(211, 43, 69, 0.4);
+  transition-duration: var(--speed-fast);
 }
 
 /* Removed by 50:50: the capsule stays so the layout never jumps. */
@@ -668,6 +771,7 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
 }
 
 .ladder__row {
+  position: relative; /* the travelling highlight is positioned against this */
   display: flex;
   align-items: center;
   gap: 0.7rem;
@@ -675,7 +779,28 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   border-radius: 6px;
   font-size: clamp(0.72rem, 1.15vw, 1.15rem);
   color: var(--text-faint);
-  transition: background var(--speed) var(--ease), color var(--speed) var(--ease);
+  transition: color var(--speed) var(--ease-inout);
+}
+
+/**
+ * The gold bar itself. One of these exists at a time; Framer moves it from
+ * the old rung to the new one (see MoneyLadder's layoutId), which is why the
+ * background lives here and not on .ladder__row--current.
+ */
+.ladder__glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(243, 197, 89, 0.14), rgba(243, 197, 89, 0.32));
+  box-shadow: inset 0 0 0 1px var(--gold), 0 0 26px rgba(243, 197, 89, 0.3);
+}
+
+/* Text rides above the highlight as it slides underneath. */
+.ladder__num,
+.ladder__value {
+  position: relative;
+  z-index: 1;
 }
 
 .ladder__num {
@@ -696,10 +821,8 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
 
 /* The current prize is the loudest thing on the ladder, by some margin. */
 .ladder__row--current {
-  background: linear-gradient(90deg, rgba(243, 197, 89, 0.14), rgba(243, 197, 89, 0.32));
   color: var(--ink);
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px var(--gold), 0 0 26px rgba(243, 197, 89, 0.3);
 }
 
 .ladder__row--current .ladder__value {
@@ -715,6 +838,32 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
 /* A safety-net rung gets a gold edge, so the guaranteed money is visible. */
 .ladder__row--net {
   border-left: 3px solid var(--gold-deep);
+}
+
+/**
+ * …and lights up as it is banked. This is the moment a pair can no longer
+ * leave with nothing, so it gets the one piece of repeated animation in the
+ * show — timed (in utils/motion.js) to sit under the safety-net sting.
+ */
+.ladder__row--banking {
+  border-left-color: var(--gold);
+  z-index: 1;
+}
+
+.ladder__row--banking .ladder__glow {
+  animation: bankedPulse 1.4s var(--ease-inout) 0.35s;
+}
+
+@keyframes bankedPulse {
+  0% {
+    box-shadow: inset 0 0 0 1px var(--gold), 0 0 26px rgba(243, 197, 89, 0.3);
+  }
+  40% {
+    box-shadow: inset 0 0 0 2px var(--gold), 0 0 60px rgba(243, 197, 89, 0.85);
+  }
+  100% {
+    box-shadow: inset 0 0 0 1px var(--gold), 0 0 26px rgba(243, 197, 89, 0.3);
+  }
 }
 
 .ladder--compact .ladder__row {
@@ -739,7 +888,10 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   border-radius: 999px;
   font-size: clamp(0.72rem, 1vw, 1rem);
   color: var(--gold);
-  transition: opacity var(--speed) var(--ease);
+  /* Opacity and scale belong to Framer here (lifelineState), so CSS only
+     eases the colours. Both animating opacity would mean neither winning. */
+  transition: color var(--speed) var(--ease-inout),
+    border-color var(--speed) var(--ease-inout);
 }
 
 .lifeline__glyph {
@@ -751,11 +903,11 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   white-space: nowrap;
 }
 
-/* Used: struck through and faded, so it reads as spent from the back row. */
+/* Used: struck through and faded, so it reads as spent from the back row.
+   The fade itself is Framer's — see lifelineState() in utils/motion.js. */
 .lifeline--used {
   border-color: var(--line);
   color: var(--text-faint);
-  opacity: 0.55;
   text-decoration: line-through;
 }
 
@@ -771,10 +923,11 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
 
 /* ─────────────────── 11. TIMER & AUDIENCE BARS ─────────────────── */
 
+/* Overlays are animated in and out by Framer (modalPop), so there is no CSS
+   animation here — two systems moving one element is how jitter starts. */
 .overlay {
   position: absolute;
   z-index: 5;
-  animation: rise var(--speed) var(--ease);
 }
 
 .overlay--timer {
@@ -782,17 +935,13 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   left: clamp(1rem, 3vw, 3rem);
 }
 
+/* Centred by layout rather than by transform: Framer owns the transform on
+   this element, and a translate(-50%, -50%) here would be overwritten. */
 .overlay--bars {
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
 }
 
 .timer {
@@ -828,10 +977,14 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   overflow: hidden;
 }
 
+/* Full width, scaled down as the clock runs. Transform rather than width, so
+   draining the bar costs the compositor a matrix and never a layout pass. */
 .timer__fill {
+  width: 100%;
   height: 100%;
+  transform-origin: left center;
   background: var(--gold);
-  transition: width 1s linear;
+  transition: background var(--speed) var(--ease-inout);
 }
 
 .timer--warning .timer__count,
@@ -906,11 +1059,12 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   overflow: hidden;
 }
 
+/* Height is animated by Framer from zero as the panel appears, so the bars
+   grow out of the floor rather than arriving already drawn. */
 .bar__fill {
   width: 100%;
   border-radius: 6px 6px 0 0;
   background: linear-gradient(180deg, var(--gold), var(--gold-deep));
-  transition: height 900ms var(--ease);
 }
 
 .bar__letter {
@@ -952,6 +1106,29 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   line-height: 1;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 70px rgba(243, 197, 89, 0.35);
+}
+
+/**
+ * The top prize. The one screen in the app allowed to take its time: the
+ * light behind the number comes up over two seconds while the figure itself
+ * settles into place (resultMoney() in utils/motion.js).
+ */
+.result--jackpot .result__name,
+.result--jackpot .result__money {
+  color: var(--gold);
+}
+
+.result--jackpot .result__money {
+  animation: jackpotGlow 2s var(--ease) both;
+}
+
+@keyframes jackpotGlow {
+  0% {
+    text-shadow: 0 0 0 rgba(243, 197, 89, 0);
+  }
+  100% {
+    text-shadow: 0 0 120px rgba(243, 197, 89, 0.75);
+  }
 }
 
 .result__detail {
@@ -1317,6 +1494,65 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
   text-align: right;
 }
 
+.slider > span:first-child {
+  min-width: 7.5em;
+}
+
+/* ── The sound check ─────────────────────────────────────────────── */
+
+.testbench {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.testbench__body {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.testbench__group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.testbench__title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.testbench__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* A file that isn't there. Not an error — just worth knowing before doors. */
+.btn--missing {
+  border-color: rgba(211, 43, 69, 0.5);
+  color: var(--text-faint);
+}
+
+.panel__note--warn {
+  color: var(--gold);
+}
+
+.presenting {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--gold-faint);
+  border-radius: var(--radius);
+  background: rgba(243, 197, 89, 0.06);
+}
+
 .keys {
   display: grid;
   gap: 0.35rem;
@@ -1407,6 +1643,15 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
 
 /* ──────────────────── 15. REDUCED MOTION ──────────────────── */
 
+/**
+ * Half of the story: this covers the CSS animations and transitions.
+ * The other half is <MotionConfig reducedMotion="user"> in App.jsx, which
+ * makes Framer drop movement and scaling and keep opacity.
+ *
+ * Between them, a viewer who asks for less motion gets a show that fades
+ * instead of moving — every state is still reachable and still legible,
+ * nothing travels across the screen, and nothing shakes.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1414,5 +1659,13 @@ button.answer:hover:not(:disabled):not(.answer--locked):not(.answer--correct):no
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Colour changes still carry meaning (right, wrong, locked), so let those
+     cross-fade rather than snapping. Movement is what's being removed here. */
+  .answer,
+  .ladder__row,
+  .lifeline {
+    transition-duration: 200ms !important;
   }
 }

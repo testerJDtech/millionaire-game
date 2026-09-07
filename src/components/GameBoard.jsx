@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import AnswerOption from './AnswerOption.jsx';
 import MoneyLadder from './MoneyLadder.jsx';
 import Lifelines from './Lifelines.jsx';
@@ -9,8 +11,16 @@ import {
   answerState,
   currentWinnings,
   formatMoney,
+  isSafetyNet,
   questionCount,
 } from '../utils/gameEngine.js';
+import {
+  answerMotion,
+  finalIntro,
+  modalPop,
+  panelSwap,
+  questionCard,
+} from '../utils/motion.js';
 
 /**
  * The question screen the room sees.
@@ -38,6 +48,52 @@ export default function GameBoard({ state, question, teamName }) {
 
   const banked = currentWinnings(run.correctCount, settings);
 
+  // The last rung is the top prize, so its reveal is allowed to run long.
+  const isFinalQuestion = run.index === total - 1;
+
+  /**
+   * A SAFETY NET BEING BANKED (Q4 and Q8)
+   *
+   * The room gets a beat before the answers turn green. The game state has
+   * already moved to `revealed` — the host knows the verdict the instant they
+   * press the button — but the board holds on `locked` for a moment longer,
+   * so the reveal lands with the sting instead of ahead of it.
+   */
+  const bankingNet =
+    run.phase === 'revealed' &&
+    run.outcome === 'correct' &&
+    isSafetyNet(run.index, settings);
+
+  /*
+   * The hold is worked out during render, not in an effect. An effect runs
+   * after the browser has painted, so the answers would flash green for one
+   * frame and then go back to gold — which is worse than no hold at all.
+   * Recording the deadline in a ref is idempotent per question, so rendering
+   * twice can't move it.
+   */
+  const holdRef = useRef({ index: null, until: 0 });
+  if (bankingNet && holdRef.current.index !== run.index) {
+    holdRef.current = {
+      index: run.index,
+      until: Date.now() + settings.safetyNetMoment.revealHoldMs,
+    };
+  }
+  const holding = bankingNet && Date.now() < holdRef.current.until;
+
+  // Nothing else changes when the hold expires, so ask for one more render.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!holding) return undefined;
+    const id = setTimeout(
+      () => tick((n) => n + 1),
+      Math.max(0, holdRef.current.until - Date.now())
+    );
+    return () => clearTimeout(id);
+  }, [holding]);
+
+  // What the *board* is showing, which lags the real phase during that hold.
+  const shownPhase = holding ? 'locked' : run.phase;
+
   return (
     <div className="stage">
       {/* ── Top: who's playing, which question, money in hand ── */}
@@ -56,35 +112,75 @@ export default function GameBoard({ state, question, teamName }) {
 
       {/* ── Centre: question and answers ── */}
       <main className="stage__main">
-        <div className="qcard">
-          <p className="qcard__text">{question.question}</p>
-        </div>
+        {/**
+         * Question and answers move as one block, keyed on the question
+         * number. The old block clears out before the new one fades up
+         * (mode="wait"), so the room never sees this question's text sitting
+         * above the next question's answers. Inside the new block, A-D then
+         * ripple in a tenth of a second apart.
+         *
+         * The key only changes when the question does — locking in and
+         * revealing leave it alone, so the answers keep their identity and
+         * their own state animations run on the same elements.
+         */}
+        <AnimatePresence mode="wait" initial={false}>
+          {run.phase === 'presenting' ? (
+            /* The £1,000,000 build-up: the value, alone, in the quiet. */
+            <motion.div className="finalcard" key="final-intro" {...finalIntro}>
+              <p className="finalcard__kicker">The final question</p>
+              <p className="finalcard__value">
+                {formatMoney(question.value, settings)}
+              </p>
+              <p className="finalcard__note">For the top prize</p>
+            </motion.div>
+          ) : (
+            <motion.div className="stage__qblock" key={run.index} {...questionCard}>
+              <div className="qcard">
+                <p className="qcard__text">{question.question}</p>
+              </div>
 
-        <div className="answers">
-          {LETTERS.map((letter) => (
-            <AnswerOption
-              key={letter}
-              letter={letter}
-              text={question.answers[letter]}
-              state={answerState({
-                letter,
-                selected: run.selected,
-                phase: run.phase,
-                removed,
-                correctAnswer: question.correctAnswer,
-              })}
-            />
-          ))}
-        </div>
+              <div className="answers">
+                {LETTERS.map((letter, i) => {
+                  const letterState = answerState({
+                    letter,
+                    selected: run.selected,
+                    phase: shownPhase,
+                    removed,
+                    correctAnswer: question.correctAnswer,
+                  });
 
-        {run.phase === 'locked' && (
-          <p className="stage__locked">Locked in. Final answer.</p>
-        )}
+                  return (
+                    <AnswerOption
+                      key={letter}
+                      letter={letter}
+                      text={question.answers[letter]}
+                      state={letterState}
+                      motion={answerMotion(letterState, i, isFinalQuestion)}
+                    />
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {shownPhase === 'locked' && run.selected && (
+            <motion.p className="stage__locked" {...panelSwap}>
+              Locked in. Final answer.
+            </motion.p>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* ── Right: the ladder ── */}
       <aside className="stage__ladder">
-        <MoneyLadder currentIndex={run.index} correctCount={run.correctCount} />
+        <MoneyLadder
+          currentIndex={run.index}
+          correctCount={run.correctCount}
+          /* The rung they have just guaranteed pulses as it is banked. */
+          celebrate={bankingNet ? run.index : null}
+        />
       </aside>
 
       {/* ── Bottom: lifelines ── */}
@@ -93,17 +189,21 @@ export default function GameBoard({ state, question, teamName }) {
       </footer>
 
       {/* ── Overlays: only one of these is ever up at a time in practice ── */}
-      {showTimer && (
-        <div className="overlay overlay--timer">
-          <PhoneTimer phone={phone} />
-        </div>
-      )}
+      <AnimatePresence>
+        {showTimer && (
+          <motion.div className="overlay overlay--timer" {...modalPop}>
+            <PhoneTimer phone={phone} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {showBars && (
-        <div className="overlay overlay--bars">
-          <AudienceResults percents={audience.percents} />
-        </div>
-      )}
+      <AnimatePresence>
+        {showBars && (
+          <motion.div className="overlay overlay--bars" {...modalPop}>
+            <AudienceResults percents={audience.percents} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

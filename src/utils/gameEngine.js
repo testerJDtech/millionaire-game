@@ -146,7 +146,9 @@ export function freshRun(teamId) {
     index: 0, // 0-based question showing on screen
     correctCount: 0, // questions answered correctly (drives the money)
     selected: null, // 'A' | 'B' | 'C' | 'D' | null
-    phase: 'asking', // 'asking' → 'locked' → 'revealed'
+    // 'presenting' is the £1,000,000 build-up, and only ever happens on the
+    // last question: 'presenting' → 'asking' → 'locked' → 'revealed'.
+    phase: 'asking',
     outcome: null, // 'correct' | 'wrong' | null (set on reveal)
     lifelines: freshLifelines(),
   };
@@ -166,9 +168,14 @@ export function createInitialState(teams, settings = defaultSettings) {
     results: {}, // { [teamId]: { winnings, reason, correctCount } }
     run: null, // the pair currently playing
     lastResult: null, // what the result screen shows
+    // Levels live in game state so both windows honour the same mix, and are
+    // carried across a game reset — nobody wants to re-balance the room
+    // because they cleared the scores.
     audio: {
       muted: false,
       volume: settings.audio.masterVolume,
+      musicVolume: settings.audio.musicVolume,
+      sfxVolume: settings.audio.sfxVolume,
       bedPaused: false,
     },
     cue: { name: null, id: 0 }, // sound to play; id increments so repeats fire

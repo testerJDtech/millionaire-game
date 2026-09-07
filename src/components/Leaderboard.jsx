@@ -1,5 +1,7 @@
+import { motion } from 'framer-motion';
 import { buildLeaderboard, formatMoney } from '../utils/gameEngine.js';
 import { settings } from '../data/settings.js';
+import { staggerItem, staggerList } from '../utils/motion.js';
 
 /** How a pair's game ended, in words the room understands. */
 const REASON_LABEL = {
@@ -29,11 +31,18 @@ export default function Leaderboard({ state, teams, compact }) {
         </header>
       )}
 
-      <ol className="board__list">
+      {/* Standings arrive one pair at a time — the room reads them in order. */}
+      <motion.ol
+        className="board__list"
+        variants={staggerList}
+        initial="initial"
+        animate="animate"
+      >
         {rows.map((row) => (
-          <li
+          <motion.li
             key={row.teamId}
             className={`board__row ${row.rank === 1 ? 'board__row--first' : ''}`}
+            variants={staggerItem}
           >
             <span className="board__rank">{row.rank}</span>
             <span className="board__name">{row.name}</span>
@@ -45,9 +54,9 @@ export default function Leaderboard({ state, teams, compact }) {
                 : 'Not played'}
             </span>
             <span className="board__money">{formatMoney(row.winnings, settings)}</span>
-          </li>
+          </motion.li>
         ))}
-      </ol>
+      </motion.ol>
     </div>
   );
 }

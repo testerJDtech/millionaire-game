@@ -1,197 +1,176 @@
 /**
- * AUDIO
+ * AUDIO — the bridge between game state and the audio manager.
  *
- * Sound is driven by a "cue" in the game state: { name, id }. The host bumps
- * the id, both windows see it, and whichever window has sound switched on
- * plays the file. That keeps the two screens in step and means you decide,
- * on the night, which window actually makes noise.
+ * HOW SOUND TRAVELS THROUGH THE APP
+ *   1. The host does something. The action attaches a cue to the new state:
+ *      { name: 'lockIn', id: 41 }. The id changes even when the same sound
+ *      fires twice in a row, which is what makes a repeat audible.
+ *   2. That state is broadcast to both windows.
+ *   3. Both windows see the new cue id. Whichever one has sound switched on
+ *      plays it. The other stays silent.
  *
- * Missing files never break anything — a failed play is swallowed silently,
- * so the game runs perfectly well with no audio at all.
+ * The consequence worth knowing: the two screens are always in step because
+ * neither of them decides anything. Sound is a function of game state, the
+ * same way the projector's picture is.
+ *
+ * The engine itself is in audioManager.js; this file only decides *when*.
  */
 
 import { useEffect, useRef } from 'react';
+import { createAudioManager } from './audioManager.js';
+import { bedForQuestion } from '../data/audioManifest.js';
+import { questionCount } from './gameEngine.js';
 import { settings } from '../data/settings.js';
 
-export function createAudioEngine() {
-  const cache = new Map();
-  let enabled = false;
-  let muted = false;
-  let volume = settings.audio.masterVolume;
-  let bedShouldPlay = false;
-
-  function element(src, loop) {
-    if (!cache.has(src)) {
-      const audio = new Audio(src);
-      audio.preload = 'auto';
-      audio.loop = Boolean(loop);
-      cache.set(src, audio);
-    }
-    return cache.get(src);
-  }
-
-  function effectiveVolume(scale) {
-    if (muted) return 0;
-    return Math.max(0, Math.min(1, volume * scale));
-  }
-
-  let bedIndex = 0;
-  let playingBedSrc = null;
-
-  /**
-   * Which loop belongs under question `index` (0-based). With
-   * settings.audio.bedByQuestion set, the bed tightens as the money climbs;
-   * a short list just means the last entry covers the rest of the ladder.
-   */
-  function bedSrc(index) {
-    const perQuestion = settings.audio.bedByQuestion;
-    if (Array.isArray(perQuestion) && perQuestion.length > 0) {
-      const pick = perQuestion[Math.min(Math.max(index, 0), perQuestion.length - 1)];
-      if (pick) return pick;
-    }
-    return settings.audio.files.bed;
-  }
-
-  function syncBed() {
-    const src = bedSrc(bedIndex);
-
-    // Swapped to a different loop (or lost the file): silence the old one.
-    if (playingBedSrc && playingBedSrc !== src) {
-      const previous = cache.get(playingBedSrc);
-      if (previous) previous.pause();
-      playingBedSrc = null;
-    }
-    if (!src) return;
-
-    const track = element(src, true);
-    track.volume = effectiveVolume(settings.audio.bedVolume);
-    if (enabled && bedShouldPlay && !muted) {
-      playingBedSrc = src;
-      const attempt = track.play();
-      if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
-    } else {
-      track.pause();
-    }
-  }
-
-  return {
-    setEnabled(value) {
-      enabled = value;
-      syncBed();
-    },
-    setMuted(value) {
-      muted = value;
-      syncBed();
-    },
-    setVolume(value) {
-      volume = value;
-      syncBed();
-    },
-
-    /**
-     * Play a one-shot sound by settings key, e.g. 'correct'.
-     * `fallback` covers slots you have not filled in — a safety-net sting with
-     * no file of its own still gets the normal "correct" sound.
-     */
-    play(name, fallback) {
-      if (!enabled || muted || !settings.audio.enabled) return;
-      const src = settings.audio.files[name] || (fallback && settings.audio.files[fallback]);
-      if (!src) return;
-      const track = element(src, false);
-      try {
-        track.currentTime = 0;
-      } catch (error) {
-        // Not yet loaded; playing from wherever it is, is fine.
-      }
-      track.volume = effectiveVolume(1);
-      const attempt = track.play();
-      if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
-    },
-
-    /**
-     * Turn the looping question bed on or off.
-     * `index` is the 0-based question number, so per-question beds can switch.
-     */
-    setBed(shouldPlay, index = 0) {
-      bedShouldPlay = shouldPlay;
-      bedIndex = index;
-      syncBed();
-    },
-
-    stopAll() {
-      bedShouldPlay = false;
-      playingBedSrc = null;
-      cache.forEach((track) => {
-        track.pause();
-      });
-    },
-  };
-}
-
 /**
- * What each new cue falls back to when you have not given it its own file.
- * This is what keeps the original six-file set sounding exactly as it did:
- * add nothing and the new moments borrow the closest old sting.
+ * Cues that mean "run a sequence", not "play a file".
+ * Everything else is played straight from the manifest by name.
  */
-const CUE_FALLBACKS = {
-  safetyNet: 'correct',
-  phoneWarning: 'lockIn',
-  phoneTimeUp: 'wrong',
-  leaderboard: 'win',
-  walkAway: 'win',
+const SEQUENCES = {
+  safetyNet: (audio) => audio.playSafetyNet(),
+  finalQuestion: (audio) =>
+    audio.presentFinalQuestion({
+      silenceMs: settings.finalQuestion.silenceMs,
+      riseMs: settings.finalQuestion.bedRiseMs,
+    }),
 };
 
 /**
- * Wires the engine up to game state.
+ * Wires the manager up to game state.
  *
  * @param state    the current game state
  * @param soundOn  whether THIS window should make noise
  */
 export function useGameAudio(state, soundOn) {
-  const engineRef = useRef(null);
+  const ref = useRef(null);
   const lastCueRef = useRef(0);
 
-  if (!engineRef.current && typeof window !== 'undefined') {
-    engineRef.current = createAudioEngine();
+  if (!ref.current && typeof window !== 'undefined') {
+    ref.current = createAudioManager();
   }
 
-  // Volume, mute and on/off.
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.setEnabled(soundOn);
-    engine.setMuted(state.audio.muted);
-    engine.setVolume(state.audio.volume);
-  }, [soundOn, state.audio.muted, state.audio.volume]);
+  /* ── This window's output, and the host's three sliders ────────── */
 
-  // One-shot cues. The id changes even when the same sound repeats.
   useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
+    const audio = ref.current;
+    if (!audio) return;
+    // Switching sound on in a window is itself a click, so it is also the
+    // moment that window is allowed to make noise at all.
+    if (soundOn) {
+      audio.unlock();
+      audio.preload('eager');
+    }
+    audio.setEnabled(soundOn);
+  }, [soundOn]);
+
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
+    audio.setLevels({
+      master: state.audio.volume,
+      music: state.audio.musicVolume,
+      sfx: state.audio.sfxVolume,
+      muted: state.audio.muted,
+    });
+  }, [
+    state.audio.volume,
+    state.audio.musicVolume,
+    state.audio.sfxVolume,
+    state.audio.muted,
+  ]);
+
+  /* ── One-shots and sequences ───────────────────────────────────── */
+
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
     if (state.cue.id === lastCueRef.current) return;
     lastCueRef.current = state.cue.id;
-    if (state.cue.name) engine.play(state.cue.name, CUE_FALLBACKS[state.cue.name]);
+
+    const name = state.cue.name;
+    if (!name) return;
+
+    // Start show is the first real click of the night: use it to lift the
+    // browser's autoplay block before anything actually needs to be heard.
+    if (name === 'intro') audio.unlock();
+
+    const sequence = SEQUENCES[name];
+    if (sequence) sequence(audio);
+    else audio.play(name);
   }, [state.cue.id, state.cue.name]);
 
-  // The looping question bed: on during a question, off once revealed so the
-  // correct/wrong sting is heard cleanly. The question number goes through too,
-  // so settings.audio.bedByQuestion can tighten the loop as the money climbs.
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    const onQuestion =
-      state.screen === 'game' && state.run && state.run.phase !== 'revealed';
-    engine.setBed(
-      Boolean(onQuestion) && !state.audio.bedPaused,
-      state.run ? state.run.index : 0
-    );
-  }, [state.screen, state.run, state.audio.bedPaused]);
+  /* ── The bed: which one, and whether it should be playing at all ─ */
 
-  // Stop everything if the window closes.
+  const run = state.run;
+  const screen = state.screen;
+  const phase = run ? run.phase : null;
+  const index = run ? run.index : 0;
+
   useEffect(() => {
-    const engine = engineRef.current;
+    const audio = ref.current;
+    if (!audio) return;
+
+    if (state.audio.bedPaused) {
+      audio.setBed(null, { fade: 600 });
+      return;
+    }
+
+    // The £1,000,000 presentation owns the audio while it runs: silence,
+    // then bedFinal creeping in. Anything set here would talk over it.
+    if (phase === 'presenting') return;
+
+    /**
+     * The opening cue plays across the title card *and* the pair-select
+     * screen — pressing Start show moves to pair select immediately, so
+     * stopping it on "not the title card any more" would cut it off a second
+     * after it began. It has done its job once someone is in the chair.
+     */
+    if (screen !== 'start' && screen !== 'teams' && audio.isPlaying('intro')) {
+      audio.stop('intro', { fade: 1200 });
+    }
+
+    if (screen === 'game' && run) {
+      /**
+       * Winning the top prize takes the bed away entirely rather than ducking
+       * it. `win` is the biggest cue in the show and it should have the room
+       * to itself; a bed still running underneath makes it sound smaller.
+       */
+      const won =
+        run.phase === 'revealed' &&
+        run.outcome === 'correct' &&
+        index === questionCount(settings) - 1;
+
+      audio.setBed(won ? null : bedForQuestion(index), won ? { fade: 800 } : {});
+      return;
+    }
+
+    // Won, lost, walked away: the bed stops. Whatever happens next should
+    // land in a quiet room, not over the top of the last question's music.
+    if (screen === 'leaderboard') {
+      /**
+       * The top-prize cue runs long, and rightly carries on over the result
+       * screen while the room reacts. By the time the standings go up it has
+       * had its moment — without this it would still be going underneath the
+       * leaderboard music, which is the one place two pieces of music would
+       * otherwise be left fighting.
+       */
+      if (audio.isPlaying('win')) audio.stop('win', { fade: 1200 });
+      audio.setBed('leaderboard', { fade: 900 });
+    } else {
+      audio.setBed(null, { fade: 900 });
+    }
+  }, [screen, phase, index, run, state.audio.bedPaused]);
+
+  /* ── Stop everything if the window closes ──────────────────────── */
+
+  useEffect(() => {
+    const audio = ref.current;
     return () => {
-      if (engine) engine.stopAll();
+      if (audio) audio.stopAll();
     };
   }, []);
+
+  return ref.current;
 }
+
+export default useGameAudio;

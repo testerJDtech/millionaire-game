@@ -1,68 +1,57 @@
-AUDIO — drop your own files in this folder
-==========================================
+AUDIO — put your sound files here
+=================================
 
-The game runs perfectly in silence. There are no sound files here, because
-none can be shipped for you: TV-show music is copyrighted, and bundling it
-would make the project not legally usable. Everything below is optional.
+Nothing ships in this folder. See AUDIO_ASSETS.md in the project root for
+where to find sounds you are allowed to use, exact search terms for each
+one, and the register you fill in as you add them.
 
-Use these exact filenames and the game picks them up with no code changes.
-Every one of them is independent — add three, add all of them, add none.
+The game runs perfectly in silence. Every slot is optional and independent:
+add five files, add twenty, add none.
 
+  music/
+    intro.mp3          big cinematic opening, over the title card
+    bed-easy.mp3       Q1-3   light, confident        (loops)
+    bed-medium.mp3     Q4-6   focused                 (loops)
+    bed-hard.mp3       Q7-8   serious                 (loops)
+    bed-final.mp3      Q9-10  sparse and very tense   (loops)
+    win.mp3            the top prize
+    leaderboard.mp3    final standings                (loops)
 
-THE SIX ESSENTIALS (start here)
--------------------------------
-  intro.mp3            "Start show" pressed
-  question-bed.mp3     loops under each question (should be seamless)
-  lock-in.mp3          "Lock in" — final answer
-  correct.mp3          right answer revealed
-  wrong.mp3            wrong answer revealed
-  win.mp3              top prize taken
+  sfx/
+    team-takes-seat.mp3   a pair takes the chair
+    question-start.mp3    a new question comes up
+    lock-in.mp3           final answer
+    correct.mp3           right answer
+    wrong.mp3             wrong answer
+    safety-net.mp3        banking Q4 or Q8
+    fifty-fifty.mp3       two answers vanish
+    phone-ring.mp3        placing the call
+    phone-warning.mp3     five seconds left
+    phone-time-up.mp3     out of time
+    ask-audience.mp3      the vote opens
+    audience-results.mp3  the bars go up
+    walk-away.mp3         taking the money
 
+Different names, or a .wav instead? Every path above is one line in
+src/data/audioManifest.js. That file is the only place filenames appear.
 
-THE REST (this is what makes it feel like the show)
----------------------------------------------------
-  team-seat.mp3        a pair is put in the chair
-  question-start.mp3   a new question comes up on screen
-  safety-net.mp3       a right answer that banks a safety net (Q4 and Q8)
-  fifty-fifty.mp3      50:50 used, two answers vanish
-  phone-ring.mp3       Phone a Friend — the call is placed
-  phone-warning.mp3    the 5-second warning (settings.phoneWarningAtSeconds)
-  phone-timeup.mp3     the phone timer hits zero
-  ask-audience.mp3     the audience vote opens
-  audience-results.mp3 the bars go up on the projector
-  walk-away.mp3        a pair walks away with the money
-  leaderboard.mp3      the final leaderboard is shown
+THE FOUR BEDS ARE THE IMPORTANT ONES
+  They carry the tension of the whole show. They should sound like the same
+  room getting darker, not four different pieces of music — four tracks by
+  one composer, or one track in four arrangements.
 
-Leave any of these out and the game falls back sensibly: safety-net borrows
-correct.mp3, phone-warning borrows lock-in.mp3, phone-timeup borrows
-wrong.mp3, and walk-away and leaderboard borrow win.mp3. So the six
-essentials on their own already sound exactly as they always did.
+  They must loop cleanly. MP3 puts a few milliseconds of silence at the start
+  and end of every file, so a bed clicks on each repeat unless it was made as
+  a seamless loop. Drones and ambience hide that; anything with a strong beat
+  exposes it.
 
+  bed-final.mp3 has one hard rule: the host has to be able to talk over it.
 
-A DIFFERENT BED PER QUESTION (optional, very effective)
--------------------------------------------------------
-The show tightens the music as the money climbs. To do the same, add
-bed-q1.mp3 … bed-q10.mp3 and uncomment the `bedByQuestion` block in
-src/data/settings.js. A short list is fine — the last entry covers every
-question after it (e.g. four files = a new bed at Q1, Q2, Q3, then Q4-Q10).
+CHECK IT BEFORE THE NIGHT
+  Host panel -> Sound -> Test audio. Every slot is a button, plus Stop all,
+  Fade out, and Check files (which tells you what's missing). Do it through
+  the venue's speakers, not the laptop's.
 
-Different names? Every slot above is a line in the `audio.files` block in
-src/data/settings.js, each one commented with exactly what triggers it.
-
-
-WHERE TO GET SOUNDS YOU CAN ACTUALLY USE
-  - freesound.org (check each licence; many are CC0)
-  - incompetech.com (Kevin MacLeod, Creative Commons with attribution)
-  - pixabay.com/sound-effects (Pixabay licence)
-  - YouTube Audio Library (filter to no-attribution tracks)
-
-Do not use the real TV show's music or logo. Beyond the licence problem,
-a venue playing it publicly may need its own permission.
-
-A FEW PRACTICAL NOTES
-  - MP3 or WAV. MP3 is smaller and every browser plays it.
-  - Keep the stings short (1-3 seconds). Long ones make hosting feel slow.
-  - Beds should loop cleanly and sit low — they play under a talking host.
-  - Test the levels through the actual venue speakers before the room fills.
-  - The question bed plays at 35% of master volume (settings.audio.bedVolume).
-  - A missing file is ignored silently. It will never interrupt the game.
+DO NOT USE THE REAL SHOW'S MUSIC
+  It is actively licensed and enforced, and a venue playing it to a paying
+  room may need its own permission. Find sounds that do the same job instead.

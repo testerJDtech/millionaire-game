@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import AnswerOption from './AnswerOption.jsx';
 import MoneyLadder from './MoneyLadder.jsx';
 import Lifelines from './Lifelines.jsx';
 import PhoneTimer from './PhoneTimer.jsx';
 import TeamSelect from './TeamSelect.jsx';
 import Leaderboard from './Leaderboard.jsx';
+import AudioTestBench from './AudioTestBench.jsx';
 import useGameState from '../hooks/useGameState.js';
 import { useGameAudio } from '../utils/audio.js';
 import { settings } from '../data/settings.js';
@@ -19,12 +21,18 @@ import {
   questionCount,
   safetyNetWinnings,
 } from '../utils/gameEngine.js';
+import { modalPop, panelSwap } from '../utils/motion.js';
 
 /**
  * THE HOST PANEL (#/host)
  *
  * Everything you need on the night, on one screen, with the answer key
  * always visible. This window owns the game: the projector only mirrors it.
+ *
+ * Motion is kept to a minimum in here on purpose. This is a control surface:
+ * the drama belongs on the projector, and anything that animates between the
+ * host and their next keypress is working against them. Only things that
+ * appear and disappear get a fade, and never longer than 250ms.
  */
 export default function HostPanel() {
   const {
@@ -39,7 +47,8 @@ export default function HostPanel() {
   // Sound comes out of this window by default — it has definitely been
   // clicked, so the browser will never block playback.
   const [soundOn, setSoundOn] = useState(settings.audio.defaultOutput === 'host');
-  useGameAudio(state, soundOn);
+  // The manager itself, so the sound check can drive it directly.
+  const audio = useGameAudio(state, soundOn);
 
   const [dataIssues] = useState(() => validateTeams(teams, settings));
   const [issuesDismissed, setIssuesDismissed] = useState(false);
@@ -156,41 +165,47 @@ export default function HostPanel() {
       </header>
 
       {/* ── Data problems found at startup ───────────────────────── */}
-      {!issuesDismissed && dataIssues.errors.length > 0 && (
-        <div className="alert alert--error">
-          <strong>Question data needs fixing in src/data/questions.js</strong>
-          <ul>
-            {dataIssues.errors.slice(0, 12).map((error, i) => (
-              <li key={i}>{error}</li>
-            ))}
-          </ul>
-          {dataIssues.errors.length > 12 && (
-            <p>…and {dataIssues.errors.length - 12} more.</p>
-          )}
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => setIssuesDismissed(true)}
-          >
-            Hide and carry on
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {!issuesDismissed && dataIssues.errors.length > 0 && (
+          <motion.div className="alert alert--error" {...panelSwap}>
+            <strong>Question data needs fixing in src/data/questions.js</strong>
+            <ul>
+              {dataIssues.errors.slice(0, 12).map((error, i) => (
+                <li key={i}>{error}</li>
+              ))}
+            </ul>
+            {dataIssues.errors.length > 12 && (
+              <p>…and {dataIssues.errors.length - 12} more.</p>
+            )}
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => setIssuesDismissed(true)}
+            >
+              Hide and carry on
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {!issuesDismissed && dataIssues.errors.length === 0 && dataIssues.warnings.length > 0 && (
-        <div className="alert alert--warn">
-          {dataIssues.warnings.map((warning, i) => (
-            <p key={i}>{warning}</p>
-          ))}
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => setIssuesDismissed(true)}
-          >
-            Got it
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {!issuesDismissed &&
+          dataIssues.errors.length === 0 &&
+          dataIssues.warnings.length > 0 && (
+            <motion.div className="alert alert--warn" {...panelSwap}>
+              {dataIssues.warnings.map((warning, i) => (
+                <p key={i}>{warning}</p>
+              ))}
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setIssuesDismissed(true)}
+              >
+                Got it
+              </button>
+            </motion.div>
+          )}
+      </AnimatePresence>
 
       <div className="host__grid">
         {/* ══ LEFT COLUMN ══ */}
@@ -295,8 +310,10 @@ export default function HostPanel() {
                 {state.audio.bedPaused ? 'Resume question bed' : 'Pause question bed'}
               </button>
             </div>
+            {/* Master over two buses. Every sound in the show is
+                master × its bus × its own level from the manifest. */}
             <label className="slider">
-              <span>Volume</span>
+              <span>Master</span>
               <input
                 type="range"
                 min="0"
@@ -309,18 +326,55 @@ export default function HostPanel() {
                 {Math.round(state.audio.volume * 100)}%
               </span>
             </label>
+            <label className="slider">
+              <span>Music &amp; beds</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={state.audio.musicVolume}
+                onChange={(event) =>
+                  actions.setMusicVolume(Number(event.target.value))
+                }
+              />
+              <span className="slider__value">
+                {Math.round(state.audio.musicVolume * 100)}%
+              </span>
+            </label>
+            <label className="slider">
+              <span>Sound effects</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={state.audio.sfxVolume}
+                onChange={(event) => actions.setSfxVolume(Number(event.target.value))}
+              />
+              <span className="slider__value">
+                {Math.round(state.audio.sfxVolume * 100)}%
+              </span>
+            </label>
+
             <p className="panel__note">
-              Sounds are optional. With no files in public/audio the game runs
-              exactly the same, in silence.
+              Levels are shared with the projector window and remembered
+              between sessions, including after a game reset. Sounds are
+              optional: with no files in public/audio the game runs exactly the
+              same, in silence.
             </p>
+
+            <AudioTestBench audio={audio} soundOn={soundOn} />
           </section>
         </div>
 
         {/* ══ MIDDLE COLUMN — the live question ══ */}
         <div className="host__col host__col--main">
-          {/* Pair just finished — confirm the result and move on. */}
+          {/* Pair just finished — confirm the result and move on.
+              Enter-only fades: the panel arrives softly, but nothing waits for
+              an exit animation before the host can act on what replaced it. */}
           {!run && state.screen === 'result' && state.lastResult && (
-            <section className="panel">
+            <motion.section className="panel" {...panelSwap}>
               <h2 className="panel__title">Result recorded</h2>
               <p className="hostq">
                 {state.teamNames[state.lastResult.teamId]} finish on{' '}
@@ -346,11 +400,11 @@ export default function HostPanel() {
                   Replay this pair
                 </button>
               </div>
-            </section>
+            </motion.section>
           )}
 
           {!run && !(state.screen === 'result' && state.lastResult) && (
-            <section className="panel panel--idle">
+            <motion.section className="panel panel--idle" {...panelSwap}>
               <h2 className="panel__title">No pair in the chair</h2>
               <p className="panel__note">
                 {everyoneDone
@@ -358,7 +412,7 @@ export default function HostPanel() {
                   : 'Pick a pair on the left to start their ten questions.'}
               </p>
               {everyoneDone && <Leaderboard state={state} teams={teams} compact />}
-            </section>
+            </motion.section>
           )}
 
           {run && currentQuestion && (
@@ -428,6 +482,28 @@ export default function HostPanel() {
               {/* Run the question */}
               <section className="panel">
                 <h2 className="panel__title">Run the question</h2>
+
+                {/* The £1,000,000 build-up runs itself, but never take the
+                    room's timing out of the host's hands. */}
+                <AnimatePresence>
+                  {run.phase === 'presenting' && (
+                    <motion.div className="presenting" {...panelSwap}>
+                      <p className="panel__note">
+                        Building up to the final question — the board is showing
+                        the value, the room is going quiet and the final bed is
+                        coming in. The question appears by itself in a moment.
+                      </p>
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        onClick={actions.beginQuestion}
+                      >
+                        Show the question now
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="btnrow btnrow--big">
                   <button
                     type="button"
@@ -455,16 +531,21 @@ export default function HostPanel() {
                   </button>
                 </div>
 
-                {run.phase === 'revealed' && (
-                  <p className={`verdict verdict--${run.outcome}`}>
-                    {run.outcome === 'correct'
-                      ? `Correct — they now have ${formatMoney(banked, settings)}`
-                      : `Wrong — they leave with ${formatMoney(
-                          safetyNetWinnings(run.correctCount, settings),
-                          settings
-                        )}`}
-                  </p>
-                )}
+                <AnimatePresence>
+                  {run.phase === 'revealed' && (
+                    <motion.p
+                      className={`verdict verdict--${run.outcome}`}
+                      {...panelSwap}
+                    >
+                      {run.outcome === 'correct'
+                        ? `Correct — they now have ${formatMoney(banked, settings)}`
+                        : `Wrong — they leave with ${formatMoney(
+                            safetyNetWinnings(run.correctCount, settings),
+                            settings
+                          )}`}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
                 <div className="btnrow">
                   <button
@@ -563,68 +644,76 @@ export default function HostPanel() {
                 </div>
 
                 {/* Mirrors the projector: gone once the call is over. */}
-                {run.lifelines.phone.secondsLeft !== null &&
-                  run.lifelines.phone.atIndex === run.index &&
-                  !run.lifelines.phone.hidden && (
-                    <PhoneTimer phone={run.lifelines.phone} compact />
-                  )}
+                <AnimatePresence>
+                  {run.lifelines.phone.secondsLeft !== null &&
+                    run.lifelines.phone.atIndex === run.index &&
+                    !run.lifelines.phone.hidden && (
+                      <motion.div {...panelSwap}>
+                        <PhoneTimer phone={run.lifelines.phone} compact />
+                      </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Ask the audience: host types the real numbers */}
-                {audience.open && (
-                  <div className="askpanel">
-                    <p className="panel__note">
-                      Type the counts or percentages you collected from the room,
-                      then reveal. Nothing is invented.
-                    </p>
-                    <div className="askpanel__inputs">
-                      {LETTERS.map((letter) => (
-                        <label key={letter} className="askfield">
-                          <span>{letter}</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={audience.percents[letter]}
-                            onChange={(event) =>
-                              actions.setAudiencePercent(letter, event.target.value)
-                            }
-                          />
-                        </label>
-                      ))}
-                    </div>
-                    <p
-                      className={`asktotal ${
-                        audienceTotal === 100 ? 'asktotal--ok' : 'asktotal--off'
-                      }`}
-                    >
-                      Total {audienceTotal}%
-                      {audienceTotal === 100 ? ' — ready' : ' — normalise before revealing'}
-                    </p>
-                    <div className="btnrow">
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={actions.normaliseAudiencePercents}
+                <AnimatePresence>
+                  {audience.open && (
+                    <motion.div className="askpanel" {...modalPop}>
+                      <p className="panel__note">
+                        Type the counts or percentages you collected from the
+                        room, then reveal. Nothing is invented.
+                      </p>
+                      <div className="askpanel__inputs">
+                        {LETTERS.map((letter) => (
+                          <label key={letter} className="askfield">
+                            <span>{letter}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={audience.percents[letter]}
+                              onChange={(event) =>
+                                actions.setAudiencePercent(letter, event.target.value)
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <p
+                        className={`asktotal ${
+                          audienceTotal === 100 ? 'asktotal--ok' : 'asktotal--off'
+                        }`}
                       >
-                        Normalise to 100%
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--primary"
-                        onClick={actions.revealAudienceResults}
-                      >
-                        Reveal to the room
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={actions.closeAudiencePanel}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
+                        Total {audienceTotal}%
+                        {audienceTotal === 100
+                          ? ' — ready'
+                          : ' — normalise before revealing'}
+                      </p>
+                      <div className="btnrow">
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={actions.normaliseAudiencePercents}
+                        >
+                          Normalise to 100%
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--primary"
+                          onClick={actions.revealAudienceResults}
+                        >
+                          Reveal to the room
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={actions.closeAudiencePanel}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </section>
             </>
           )}

@@ -1,4 +1,4 @@
-# Who Wants To Be A Millionaire? — quiz night game
+# The Golden Question — quiz night game
 
 A host-controlled quiz show for one laptop and a projector. React + Vite,
 no backend, no database, no internet needed once installed.
@@ -78,34 +78,59 @@ so nothing else needs changing.
 audio filenames and the show title.
 
 ```js
-prizeLadder: [100, 500, 1000, 5000, 10000, 25000, 50000, 100000, 500000, 1000000],
-safetyNets: { enabled: true, levels: [4, 8] },
+prizeLadder: [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 1000000],
+safetyNets: { enabled: true, levels: [5] },
 ```
 
 The ladder's length defines how many questions each pair plays, so shortening
-it to five values gives you a five-question game with no other edits. Change a
-value and every question's `value` in `questions.js` must be changed to match —
-the host panel lists any mismatch on startup.
+it to five values gives you a five-question game with no other edits.
 
-**Safety nets**: pass question 4 and a later wrong answer still banks £5,000;
-pass question 8 and it banks £100,000. Set `enabled: false` for wrong
-answer = £0, or add levels for a gentler game.
+**Safety nets** were left open in the brief, so the default is: pass question 5
+and a later wrong answer still banks £1,000. Set `enabled: false` for wrong
+answer = £0, or `levels: [5, 8]` for a gentler game.
 
 ## Sound
 
-Optional. With no files there the game runs identically, in silence — a missing
-file is ignored and never interrupts anything.
+Optional, and independent: with no files at all the game runs identically, in
+silence. A missing file is noted once and skipped forever after.
 
-Every moment in the game has its own sound slot: the pair taking the chair, a
-question coming up, lock-in, right, wrong, a banked safety net, each of the
-three lifelines, walking away, the top prize, the leaderboard. They are listed
-with their triggers in `settings.audio.files` (`src/data/settings.js`), and by
-filename in `public/audio/README.txt` — drop a file in and it plays, no code
-change. Six core files are enough to start; the rest borrow from those until
-you add them.
+**No audio ships with this project.** See **[AUDIO_ASSETS.md](AUDIO_ASSETS.md)**
+for where to find sounds you're allowed to use, exact search terms for all
+twenty slots, and the licence register to fill in as you add them.
 
-For the real thing, `settings.audio.bedByQuestion` takes one looping bed per
-question, so the music tightens as the money climbs.
+**One manifest.** [`src/data/audioManifest.js`](src/data/audioManifest.js) is
+the only file that knows a filename. It holds the path, bus, level, ducking and
+retrigger guard for every slot. Swap a file, change one line, done.
+
+**The tension ladder.** The bed under the question gets darker as the money
+climbs, crossfading rather than cutting when a tier changes:
+
+| Questions | Bed | Should feel |
+|---|---|---|
+| 1–3 | `bedEasy` | light and exciting |
+| 4–6 | `bedMedium` | focused |
+| 7–8 | `bedHard` | genuinely serious |
+| 9–10 | `bedFinal` | the room goes quiet |
+
+**Two moments are sequences, not sounds.**
+
+- *Banking a safety net (Q4, Q8)* — the board holds the verdict for half a
+  second, `correct` lands, the bed drops right down, and `safetyNet` arrives
+  into the gap while the rung they've just guaranteed pulses on the ladder.
+- *The £1,000,000 question* — everything fades, the room gets a second of
+  actual silence, the value comes up on its own, `bedFinal` creeps in
+  underneath, and only then do the question and answers arrive. It runs itself;
+  the host can cut it short from the panel. Turn it off with
+  `settings.finalQuestion.present`.
+
+**Mixing.** Every sound is `master × its bus × its own level`, so the host's
+three sliders (Master, Music & beds, Sound effects) can never be bypassed.
+Stings duck the bed underneath them and let it back up afterwards. Levels are
+shared with the projector window and survive a game reset.
+
+**Before the night:** Host panel → Sound → **Test audio**. Every slot on a
+button, plus Stop all, Fade out, and **Check files**, which tells you what's
+missing. Do it through the venue's speakers.
 
 Sound comes out of the **host window** by default. That's deliberate: the host
 window has definitely been clicked, so browsers will never block playback.
@@ -154,11 +179,6 @@ Both windows have a sound toggle if you'd rather it came from the projector.
 
 Shortcuts are ignored while you're typing in a text box.
 
-The phone timer clears itself: it shows "Time up" for a moment
-(`phoneTimerHideAfterSeconds`), then comes off both screens, and it also goes
-the instant an answer is locked in. **Clear timer** on the host panel takes it
-down early; **Reset timer** puts it back for another go on the same question.
-
 ### If something goes wrong
 
 | Problem | Fix |
@@ -181,13 +201,16 @@ Every destructive control asks you to confirm first.
 src/
 ├── data/
 │   ├── questions.js     ← the quiz. The only file you need to edit.
-│   └── settings.js      ← ladder, safety nets, audio, timings.
+│   ├── settings.js      ← ladder, safety nets, levels, timings.
+│   └── audioManifest.js ← every sound: file, level, ducking. One table.
 ├── hooks/useGameState.js  ← the whole game state + every action.
 ├── utils/
 │   ├── gameEngine.js    ← the rules, as pure functions. No React.
 │   ├── validation.js    ← startup checks on the question data.
 │   ├── syncChannel.js   ← keeps the two windows in step.
-│   └── audio.js         ← sound engine, driven by cues in state.
+│   ├── audioManager.js  ← the sound engine: buses, fades, ducking.
+│   ├── audio.js         ← when each sound fires, driven by cues in state.
+│   └── motion.js        ← every animation's timing and easing, in one place.
 └── components/          ← the screens.
 ```
 
@@ -206,6 +229,39 @@ phase to `revealed`.
 **50:50 is repeatable, not random.** The two answers it removes come from a
 hash of the question's id, so the host screen, the projector, and the page
 after a refresh all agree.
+
+## Motion
+
+All of it is defined in `src/utils/motion.js` — durations, easings and
+variants. Components say *what* happened; that file says how it should look.
+Re-timing the show is a change in one file.
+
+**Two tiers, kept apart on purpose.**
+
+| | | |
+|---|---|---|
+| Functional | 150–450ms | navigation, panels, lists, hover. Gets out of the way. |
+| Dramatic | 500–2500ms | lock-in (650ms), the reveal (900ms), the top prize (2s). Buys tension. |
+
+The dramatic tier is only ever used on the projector, and never between the
+host and their next keypress. The host panel fades things in and out at 250ms
+and does nothing else: it's a control surface, and a control that animates is
+a control that feels slow.
+
+**Framer Motion** handles anything that moves, sequences or has to survive
+being removed from the DOM. **CSS transitions** handle hover, focus and the
+colour/glow changes. The two never animate the same property on the same
+element — that's the rule that keeps them from fighting.
+
+**Reduced motion** is honoured two ways: `<MotionConfig reducedMotion="user">`
+in `App.jsx` for Framer, and the media query at the foot of `styles.css` for
+everything else. A viewer who asks for less motion gets a show that fades
+rather than moves; colour still changes, because on this screen colour is
+information.
+
+**60fps** comes from animating transform and opacity only — the timer bar
+scales rather than resizing, and screens crossfade on their own layers — so
+nothing in the show triggers a layout pass mid-animation.
 
 ### Deliberate choices worth knowing
 

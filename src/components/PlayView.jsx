@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import StartScreen from './StartScreen.jsx';
 import TeamSelect from './TeamSelect.jsx';
 import GameBoard from './GameBoard.jsx';
@@ -7,6 +8,7 @@ import useGameState from '../hooks/useGameState.js';
 import { useGameAudio } from '../utils/audio.js';
 import { settings } from '../data/settings.js';
 import { formatMoney } from '../utils/gameEngine.js';
+import { resultLayer, resultMoney, screenLayer } from '../utils/motion.js';
 
 /** Words for the pair-result screen. */
 const RESULT_HEADLINE = {
@@ -73,6 +75,9 @@ export default function PlayView() {
     currentTeam ? state.teamNames[currentTeam.id] ?? currentTeam.name : '';
 
   let screen = null;
+  // Changing this key is what makes one screen dissolve into the next.
+  let screenKey = state.screen;
+  let variants = screenLayer;
 
   if (state.screen === 'start') {
     screen = <StartScreen waitingLabel="Standing by" />;
@@ -86,14 +91,24 @@ export default function PlayView() {
     screen = (
       <GameBoard state={state} question={currentQuestion} teamName={teamName} />
     );
+    // Each pair gets their own entrance as they take the chair.
+    screenKey = `game-${state.run.teamId}`;
   } else if (state.screen === 'result' && state.lastResult) {
     const result = state.lastResult;
     const name = state.teamNames[result.teamId] || result.teamId;
+    const jackpot = result.reason === 'jackpot';
+
+    // The top prize is the one moment in the show allowed to take its time.
+    variants = resultLayer(jackpot);
+    screenKey = `result-${result.teamId}`;
+
     screen = (
-      <div className="result">
+      <div className={`result ${jackpot ? 'result--jackpot' : ''}`}>
         <p className="result__kicker">{RESULT_HEADLINE[result.reason] || 'Result'}</p>
         <h2 className="result__name">{name}</h2>
-        <p className="result__money">{formatMoney(result.winnings, settings)}</p>
+        <motion.p className="result__money" {...resultMoney(jackpot)}>
+          {formatMoney(result.winnings, settings)}
+        </motion.p>
         <p className="result__detail">
           {result.correctCount} of {settings.prizeLadder.length} answered correctly
         </p>
@@ -108,11 +123,25 @@ export default function PlayView() {
   } else {
     // Covers the gap if the host resets while this window is mid-render.
     screen = <StartScreen waitingLabel="Standing by" />;
+    screenKey = 'standby';
   }
 
   return (
     <div className="play">
-      {screen}
+      {/* Screens are stacked, so the outgoing one is still there to fade
+          through while the next arrives — a crossfade, not a blink. */}
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={screenKey}
+          className="screenlayer"
+          variants={variants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+        >
+          {screen}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Small, out-of-the-way controls. They fade out of sight in fullscreen. */}
       <div className="playtools">

@@ -276,15 +276,35 @@ export function useGameState(role) {
             return finishRun(s, currentWinnings(run.correctCount, settings), 'jackpot');
           }
 
+          const nextIndex = run.index + 1;
+
+          /**
+           * THE £1,000,000 QUESTION
+           * The last one is introduced rather than just shown. The board goes
+           * to a value card, the audio drops to near-silence and bedFinal
+           * creeps in; `beginQuestion` (fired automatically by the host
+           * window, or by the host pressing Show the question) brings in the
+           * question itself. Turn it off with finalQuestion.present.
+           */
+          const presenting =
+            settings.finalQuestion.present && nextIndex === total - 1;
+
           return withCue(
             patchRun(s, {
-              index: run.index + 1,
+              index: nextIndex,
               selected: null,
-              phase: 'asking',
+              phase: presenting ? 'presenting' : 'asking',
               outcome: null,
             }),
-            'questionStart'
+            presenting ? 'finalQuestion' : 'questionStart'
           );
+        }),
+
+      /** End the £1,000,000 build-up and put the question on screen. */
+      beginQuestion: () =>
+        apply((s) => {
+          if (!s.run || s.run.phase !== 'presenting') return s;
+          return withCue(patchRun(s, { phase: 'asking' }), 'questionStart');
         }),
 
       /** Step back a question — a correction tool, not part of normal play. */
@@ -546,8 +566,9 @@ export function useGameState(role) {
       resetGame: () =>
         apply((s) => {
           const fresh = createInitialState(teams, settings);
-          // Keep whatever names were typed in; lose everything else.
-          return { ...fresh, teamNames: s.teamNames };
+          // Keep the names that were typed in and the levels that were set
+          // for this room; lose everything else.
+          return { ...fresh, teamNames: s.teamNames, audio: s.audio };
         }),
 
       /* — Audio & screen — */
@@ -555,8 +576,15 @@ export function useGameState(role) {
       toggleMute: () =>
         apply((s) => ({ ...s, audio: { ...s.audio, muted: !s.audio.muted } })),
 
+      /** Master, and the two buses under it. All three are 0-1. */
       setVolume: (volume) =>
         apply((s) => ({ ...s, audio: { ...s.audio, volume } })),
+
+      setMusicVolume: (musicVolume) =>
+        apply((s) => ({ ...s, audio: { ...s.audio, musicVolume } })),
+
+      setSfxVolume: (sfxVolume) =>
+        apply((s) => ({ ...s, audio: { ...s.audio, sfxVolume } })),
 
       toggleBed: () =>
         apply((s) => ({ ...s, audio: { ...s.audio, bedPaused: !s.audio.bedPaused } })),
@@ -591,6 +619,25 @@ export function useGameState(role) {
     );
     return () => clearTimeout(id);
   }, [isHost, phoneSpent, actions]);
+
+  /* ── The £1,000,000 build-up runs itself ─────────────────────────
+   *
+   * Held by the host window for the same reason as everything else with a
+   * clock: one owner, so the two screens can't disagree about how long the
+   * room has been sitting in silence. The host can cut it short from the
+   * panel; this is the version where they don't have to.
+   */
+
+  const presenting = Boolean(state.run && state.run.phase === 'presenting');
+
+  useEffect(() => {
+    if (!isHost || !presenting) return undefined;
+    const id = setTimeout(
+      () => actions.beginQuestion(),
+      Math.max(0, settings.finalQuestion.holdMs)
+    );
+    return () => clearTimeout(id);
+  }, [isHost, presenting, actions]);
 
   return {
     state,

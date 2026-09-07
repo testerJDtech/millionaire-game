@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MotionConfig } from 'framer-motion';
 import HostPanel from './components/HostPanel.jsx';
 import PlayView from './components/PlayView.jsx';
 import { settings } from './data/settings.js';
@@ -24,6 +25,22 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  /**
+   * One motion root for the whole app.
+   *
+   * `reducedMotion="user"` means a viewer whose system asks for less motion
+   * gets opacity changes only — no movement, no scaling — without a single
+   * component having to check. The CSS media query at the foot of styles.css
+   * does the same for the animations that aren't Framer's.
+   */
+  return (
+    <MotionConfig reducedMotion="user">
+      <Route route={route} />
+    </MotionConfig>
+  );
+}
+
+function Route({ route }) {
   if (route === 'host') return <HostPanel />;
   if (route === 'play') return <PlayView />;
 

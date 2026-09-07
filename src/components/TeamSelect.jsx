@@ -1,5 +1,7 @@
+import { motion } from 'framer-motion';
 import { formatMoney, teamStatus } from '../utils/gameEngine.js';
 import { settings } from '../data/settings.js';
+import { staggerItem, staggerList } from '../utils/motion.js';
 
 /**
  * The four pairs and where each one is up to.
@@ -15,16 +17,22 @@ export default function TeamSelect({ state, teams, onSelect, onRename, compact }
     <div className={`teams ${compact ? 'teams--compact' : ''}`}>
       {!compact && <h2 className="teams__heading">Who's in the chair?</h2>}
 
-      <ul className="teams__list">
+      <motion.ul
+        className="teams__list"
+        variants={staggerList}
+        initial="initial"
+        animate="animate"
+      >
         {teams.map((team) => {
           const status = teamStatus(state, team.id);
           const result = state.results[team.id];
           const name = state.teamNames[team.id] ?? team.name;
 
           return (
-            <li
+            <motion.li
               key={team.id}
               className={`teamcard teamcard--${status.replace(/\s+/g, '-').toLowerCase()}`}
+              variants={staggerItem}
             >
               <div className="teamcard__top">
                 {onRename ? (
@@ -59,10 +67,10 @@ export default function TeamSelect({ state, teams, onSelect, onRename, compact }
                   {result ? 'Finished' : 'Put in the chair'}
                 </button>
               )}
-            </li>
+            </motion.li>
           );
         })}
-      </ul>
+      </motion.ul>
     </div>
   );
 }
