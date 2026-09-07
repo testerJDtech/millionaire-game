@@ -35,12 +35,38 @@ export function createAudioEngine() {
     return Math.max(0, Math.min(1, volume * scale));
   }
 
-  const bed = () => element(settings.audio.files.bed, true);
+  let bedIndex = 0;
+  let playingBedSrc = null;
+
+  /**
+   * Which loop belongs under question `index` (0-based). With
+   * settings.audio.bedByQuestion set, the bed tightens as the money climbs;
+   * a short list just means the last entry covers the rest of the ladder.
+   */
+  function bedSrc(index) {
+    const perQuestion = settings.audio.bedByQuestion;
+    if (Array.isArray(perQuestion) && perQuestion.length > 0) {
+      const pick = perQuestion[Math.min(Math.max(index, 0), perQuestion.length - 1)];
+      if (pick) return pick;
+    }
+    return settings.audio.files.bed;
+  }
 
   function syncBed() {
-    const track = bed();
+    const src = bedSrc(bedIndex);
+
+    // Swapped to a different loop (or lost the file): silence the old one.
+    if (playingBedSrc && playingBedSrc !== src) {
+      const previous = cache.get(playingBedSrc);
+      if (previous) previous.pause();
+      playingBedSrc = null;
+    }
+    if (!src) return;
+
+    const track = element(src, true);
     track.volume = effectiveVolume(settings.audio.bedVolume);
     if (enabled && bedShouldPlay && !muted) {
+      playingBedSrc = src;
       const attempt = track.play();
       if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
     } else {
@@ -62,10 +88,14 @@ export function createAudioEngine() {
       syncBed();
     },
 
-    /** Play a one-shot sound by settings key, e.g. 'correct'. */
-    play(name) {
+    /**
+     * Play a one-shot sound by settings key, e.g. 'correct'.
+     * `fallback` covers slots you have not filled in — a safety-net sting with
+     * no file of its own still gets the normal "correct" sound.
+     */
+    play(name, fallback) {
       if (!enabled || muted || !settings.audio.enabled) return;
-      const src = settings.audio.files[name];
+      const src = settings.audio.files[name] || (fallback && settings.audio.files[fallback]);
       if (!src) return;
       const track = element(src, false);
       try {
@@ -78,20 +108,38 @@ export function createAudioEngine() {
       if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
     },
 
-    /** Turn the looping question bed on or off. */
-    setBed(shouldPlay) {
+    /**
+     * Turn the looping question bed on or off.
+     * `index` is the 0-based question number, so per-question beds can switch.
+     */
+    setBed(shouldPlay, index = 0) {
       bedShouldPlay = shouldPlay;
+      bedIndex = index;
       syncBed();
     },
 
     stopAll() {
       bedShouldPlay = false;
+      playingBedSrc = null;
       cache.forEach((track) => {
         track.pause();
       });
     },
   };
 }
+
+/**
+ * What each new cue falls back to when you have not given it its own file.
+ * This is what keeps the original six-file set sounding exactly as it did:
+ * add nothing and the new moments borrow the closest old sting.
+ */
+const CUE_FALLBACKS = {
+  safetyNet: 'correct',
+  phoneWarning: 'lockIn',
+  phoneTimeUp: 'wrong',
+  leaderboard: 'win',
+  walkAway: 'win',
+};
 
 /**
  * Wires the engine up to game state.
@@ -122,17 +170,21 @@ export function useGameAudio(state, soundOn) {
     if (!engine) return;
     if (state.cue.id === lastCueRef.current) return;
     lastCueRef.current = state.cue.id;
-    if (state.cue.name) engine.play(state.cue.name);
+    if (state.cue.name) engine.play(state.cue.name, CUE_FALLBACKS[state.cue.name]);
   }, [state.cue.id, state.cue.name]);
 
   // The looping question bed: on during a question, off once revealed so the
-  // correct/wrong sting is heard cleanly.
+  // correct/wrong sting is heard cleanly. The question number goes through too,
+  // so settings.audio.bedByQuestion can tighten the loop as the money climbs.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
     const onQuestion =
       state.screen === 'game' && state.run && state.run.phase !== 'revealed';
-    engine.setBed(Boolean(onQuestion) && !state.audio.bedPaused);
+    engine.setBed(
+      Boolean(onQuestion) && !state.audio.bedPaused,
+      state.run ? state.run.index : 0
+    );
   }, [state.screen, state.run, state.audio.bedPaused]);
 
   // Stop everything if the window closes.

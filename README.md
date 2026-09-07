@@ -1,4 +1,4 @@
-# The Golden Question — quiz night game
+# Who Wants To Be A Millionaire? — quiz night game
 
 A host-controlled quiz show for one laptop and a projector. React + Vite,
 no backend, no database, no internet needed once installed.
@@ -78,22 +78,34 @@ so nothing else needs changing.
 audio filenames and the show title.
 
 ```js
-prizeLadder: [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 1000000],
-safetyNets: { enabled: true, levels: [5] },
+prizeLadder: [100, 500, 1000, 5000, 10000, 25000, 50000, 100000, 500000, 1000000],
+safetyNets: { enabled: true, levels: [4, 8] },
 ```
 
 The ladder's length defines how many questions each pair plays, so shortening
-it to five values gives you a five-question game with no other edits.
+it to five values gives you a five-question game with no other edits. Change a
+value and every question's `value` in `questions.js` must be changed to match —
+the host panel lists any mismatch on startup.
 
-**Safety nets** were left open in the brief, so the default is: pass question 5
-and a later wrong answer still banks £1,000. Set `enabled: false` for wrong
-answer = £0, or `levels: [5, 8]` for a gentler game.
+**Safety nets**: pass question 4 and a later wrong answer still banks £5,000;
+pass question 8 and it banks £100,000. Set `enabled: false` for wrong
+answer = £0, or add levels for a gentler game.
 
 ## Sound
 
-Optional. See `public/audio/README.txt` for the six filenames and where to
-find music you're allowed to use. With no files there the game runs identically,
-in silence — a missing file is ignored and never interrupts anything.
+Optional. With no files there the game runs identically, in silence — a missing
+file is ignored and never interrupts anything.
+
+Every moment in the game has its own sound slot: the pair taking the chair, a
+question coming up, lock-in, right, wrong, a banked safety net, each of the
+three lifelines, walking away, the top prize, the leaderboard. They are listed
+with their triggers in `settings.audio.files` (`src/data/settings.js`), and by
+filename in `public/audio/README.txt` — drop a file in and it plays, no code
+change. Six core files are enough to start; the rest borrow from those until
+you add them.
+
+For the real thing, `settings.audio.bedByQuestion` takes one looping bed per
+question, so the music tightens as the money climbs.
 
 Sound comes out of the **host window** by default. That's deliberate: the host
 window has definitely been clicked, so browsers will never block playback.
@@ -141,6 +153,11 @@ Both windows have a sound toggle if you'd rather it came from the projector.
 | `Shift+F` | fullscreen the projector |
 
 Shortcuts are ignored while you're typing in a text box.
+
+The phone timer clears itself: it shows "Time up" for a moment
+(`phoneTimerHideAfterSeconds`), then comes off both screens, and it also goes
+the instant an answer is locked in. **Clear timer** on the host panel takes it
+down early; **Reset timer** puts it back for another go on the same question.
 
 ### If something goes wrong
 

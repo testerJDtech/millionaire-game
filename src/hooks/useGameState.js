@@ -19,6 +19,7 @@ import {
   currentWinnings,
   fiftyFiftyRemovals,
   freshRun,
+  isSafetyNet,
   normalisePercents,
   questionCount,
   safetyNetWinnings,
@@ -127,7 +128,10 @@ export function useGameState(role) {
     return currentTeam.questions[state.run.index] || null;
   }, [state.run, currentTeam]);
 
-  /** Attach a sound cue to a state object. */
+  /**
+   * Attach a sound cue to a state object. `name` is a key in
+   * settings.audio.files — that file is where each moment's sound is set.
+   */
   const withCue = (draft, name) => ({
     ...draft,
     cue: { name, id: draft.cue.id + 1 },
@@ -180,7 +184,7 @@ export function useGameState(role) {
         }),
 
       goToLeaderboard: () =>
-        apply((s) => withCue({ ...s, screen: 'leaderboard' }, 'win')),
+        apply((s) => withCue({ ...s, screen: 'leaderboard' }, 'leaderboard')),
 
       renameTeam: (teamId, name) =>
         apply((s) => ({ ...s, teamNames: { ...s.teamNames, [teamId]: name } })),
@@ -189,7 +193,10 @@ export function useGameState(role) {
       selectTeam: (teamId) =>
         apply((s) => {
           if (s.results[teamId]) return s;
-          return { ...s, screen: 'game', run: freshRun(teamId), lastResult: null };
+          return withCue(
+            { ...s, screen: 'game', run: freshRun(teamId), lastResult: null },
+            'teamTakesSeat'
+          );
         }),
 
       /* — Answering — */
@@ -207,7 +214,16 @@ export function useGameState(role) {
       lockIn: () =>
         apply((s) => {
           if (!s.run || s.run.phase !== 'asking' || !s.run.selected) return s;
-          return withCue(patchRun(s, { phase: 'locked' }), 'lockIn');
+          // An answer is in, so the call is over either way: stop and clear
+          // the countdown rather than leaving it ticking over the reveal.
+          const locked = patchRun(s, {
+            phase: 'locked',
+            lifelines: {
+              ...s.run.lifelines,
+              phone: { ...s.run.lifelines.phone, running: false, hidden: true },
+            },
+          });
+          return withCue(locked, 'lockIn');
         }),
 
       /** Reveal green/red. Does NOT move the game on — that's Next. */
@@ -225,7 +241,14 @@ export function useGameState(role) {
             correctCount: isCorrect ? s.run.correctCount + 1 : s.run.correctCount,
           });
 
-          const sound = isCorrect ? (isFinalQuestion ? 'win' : 'correct') : 'wrong';
+          // A banked safety net gets its own sting — the moment the room
+          // realises the pair cannot leave with nothing.
+          let sound = 'wrong';
+          if (isCorrect) {
+            if (isFinalQuestion) sound = 'win';
+            else if (isSafetyNet(s.run.index, settings)) sound = 'safetyNet';
+            else sound = 'correct';
+          }
           return withCue(withReveal, sound);
         }),
 
@@ -253,12 +276,15 @@ export function useGameState(role) {
             return finishRun(s, currentWinnings(run.correctCount, settings), 'jackpot');
           }
 
-          return patchRun(s, {
-            index: run.index + 1,
-            selected: null,
-            phase: 'asking',
-            outcome: null,
-          });
+          return withCue(
+            patchRun(s, {
+              index: run.index + 1,
+              selected: null,
+              phase: 'asking',
+              outcome: null,
+            }),
+            'questionStart'
+          );
         }),
 
       /** Step back a question — a correction tool, not part of normal play. */
@@ -280,12 +306,15 @@ export function useGameState(role) {
       skipQuestion: () =>
         apply((s) => {
           if (!s.run || s.run.index >= total - 1) return s;
-          return patchRun(s, {
-            index: s.run.index + 1,
-            selected: null,
-            phase: 'asking',
-            outcome: null,
-          });
+          return withCue(
+            patchRun(s, {
+              index: s.run.index + 1,
+              selected: null,
+              phase: 'asking',
+              outcome: null,
+            }),
+            'questionStart'
+          );
         }),
 
       /* — Lifelines — */
@@ -297,14 +326,17 @@ export function useGameState(role) {
           const question = team.questions[s.run.index];
           const removed = fiftyFiftyRemovals(question);
 
-          return patchRun(s, {
-            // Clear a selection that has just been taken off the board.
-            selected: removed.includes(s.run.selected) ? null : s.run.selected,
-            lifelines: {
-              ...s.run.lifelines,
-              fifty: { used: true, removed, atIndex: s.run.index },
-            },
-          });
+          return withCue(
+            patchRun(s, {
+              // Clear a selection that has just been taken off the board.
+              selected: removed.includes(s.run.selected) ? null : s.run.selected,
+              lifelines: {
+                ...s.run.lifelines,
+                fifty: { used: true, removed, atIndex: s.run.index },
+              },
+            }),
+            'fiftyFifty'
+          );
         }),
 
       startPhoneTimer: () =>
@@ -312,7 +344,14 @@ export function useGameState(role) {
           if (!s.run) return s;
           const phone = s.run.lifelines.phone;
           if (phone.used && phone.atIndex !== s.run.index) return s;
-          return patchRun(s, {
+          // Picking a paused clock back up, rather than placing a fresh call:
+          // part-used, not finished, and on this same question.
+          const resuming =
+            phone.atIndex === s.run.index &&
+            !phone.finished &&
+            phone.secondsLeft !== null &&
+            phone.secondsLeft < settings.phoneTimerSeconds;
+          const next = patchRun(s, {
             lifelines: {
               ...s.run.lifelines,
               phone: {
@@ -320,6 +359,7 @@ export function useGameState(role) {
                 atIndex: s.run.index,
                 running: true,
                 finished: false,
+                hidden: false,
                 secondsLeft:
                   phone.secondsLeft === null || phone.finished
                     ? settings.phoneTimerSeconds
@@ -327,6 +367,8 @@ export function useGameState(role) {
               },
             },
           });
+          // The ring is for placing the call, not for un-pausing the clock.
+          return resuming ? next : withCue(next, 'phoneRing');
         }),
 
       pausePhoneTimer: () =>
@@ -350,8 +392,25 @@ export function useGameState(role) {
                 ...s.run.lifelines.phone,
                 running: false,
                 finished: false,
+                hidden: false,
                 secondsLeft: settings.phoneTimerSeconds,
               },
+            },
+          });
+        }),
+
+      /**
+       * Take the countdown off both screens. The lifeline stays spent — this
+       * only clears the display. Fires by itself a beat after "Time up", and
+       * on lock-in, so a dead timer never sits over the answers.
+       */
+      hidePhoneTimer: () =>
+        apply((s) => {
+          if (!s.run || s.run.lifelines.phone.hidden) return s;
+          return patchRun(s, {
+            lifelines: {
+              ...s.run.lifelines,
+              phone: { ...s.run.lifelines.phone, running: false, hidden: true },
             },
           });
         }),
@@ -376,20 +435,24 @@ export function useGameState(role) {
             },
           });
 
-          if (secondsLeft === 0) return withCue(next, 'wrong');
-          if (secondsLeft === settings.phoneWarningAtSeconds) return withCue(next, 'lockIn');
+          if (secondsLeft === 0) return withCue(next, 'phoneTimeUp');
+          if (secondsLeft === settings.phoneWarningAtSeconds)
+            return withCue(next, 'phoneWarning');
           return next;
         }),
 
       openAudiencePanel: () =>
         apply((s) => {
           if (!s.run) return s;
-          return patchRun(s, {
-            lifelines: {
-              ...s.run.lifelines,
-              audience: { ...s.run.lifelines.audience, open: true, atIndex: s.run.index },
-            },
-          });
+          return withCue(
+            patchRun(s, {
+              lifelines: {
+                ...s.run.lifelines,
+                audience: { ...s.run.lifelines.audience, open: true, atIndex: s.run.index },
+              },
+            }),
+            'askAudience'
+          );
         }),
 
       closeAudiencePanel: () =>
@@ -432,19 +495,22 @@ export function useGameState(role) {
         apply((s) => {
           if (!s.run) return s;
           const audience = s.run.lifelines.audience;
-          return patchRun(s, {
-            lifelines: {
-              ...s.run.lifelines,
-              audience: {
-                ...audience,
-                used: true,
-                revealed: true,
-                open: false,
-                atIndex: s.run.index,
-                percents: normalisePercents(audience.percents),
+          return withCue(
+            patchRun(s, {
+              lifelines: {
+                ...s.run.lifelines,
+                audience: {
+                  ...audience,
+                  used: true,
+                  revealed: true,
+                  open: false,
+                  atIndex: s.run.index,
+                  percents: normalisePercents(audience.percents),
+                },
               },
-            },
-          });
+            }),
+            'audienceResults'
+          );
         }),
 
       /* — Ending, resetting — */
@@ -453,7 +519,10 @@ export function useGameState(role) {
       endPair: () =>
         apply((s) => {
           if (!s.run) return s;
-          return finishRun(s, currentWinnings(s.run.correctCount, settings), 'ended');
+          return withCue(
+            finishRun(s, currentWinnings(s.run.correctCount, settings), 'ended'),
+            'walkAway'
+          );
         }),
 
       /** Wipe a pair's result so they can play again from question 1. */
@@ -507,6 +576,21 @@ export function useGameState(role) {
     const id = setInterval(() => actions.tickPhoneTimer(), 1000);
     return () => clearInterval(id);
   }, [isHost, phoneRunning, actions]);
+
+  /* ── …and clears itself a beat after it runs out ─────────────────── */
+
+  const phoneSpent = Boolean(
+    state.run && state.run.lifelines.phone.finished && !state.run.lifelines.phone.hidden
+  );
+
+  useEffect(() => {
+    if (!isHost || !phoneSpent) return undefined;
+    const id = setTimeout(
+      () => actions.hidePhoneTimer(),
+      Math.max(0, settings.phoneTimerHideAfterSeconds) * 1000
+    );
+    return () => clearTimeout(id);
+  }, [isHost, phoneSpent, actions]);
 
   return {
     state,

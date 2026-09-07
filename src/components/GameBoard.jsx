@@ -30,7 +30,8 @@ export default function GameBoard({ state, question, teamName }) {
   const removed = fifty.atIndex === run.index ? fifty.removed : [];
 
   const phone = run.lifelines.phone;
-  const showTimer = phone.atIndex === run.index && phone.secondsLeft !== null;
+  const showTimer =
+    phone.atIndex === run.index && phone.secondsLeft !== null && !phone.hidden;
 
   const audience = run.lifelines.audience;
   const showBars = audience.revealed && audience.atIndex === run.index;

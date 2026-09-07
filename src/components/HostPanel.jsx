@@ -543,6 +543,18 @@ export default function HostPanel() {
                   <button
                     type="button"
                     className="btn"
+                    onClick={actions.hidePhoneTimer}
+                    disabled={
+                      run.lifelines.phone.secondsLeft === null ||
+                      run.lifelines.phone.atIndex !== run.index ||
+                      run.lifelines.phone.hidden
+                    }
+                  >
+                    Clear timer
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
                     onClick={actions.openAudiencePanel}
                     disabled={run.lifelines.audience.used}
                   >
@@ -550,9 +562,12 @@ export default function HostPanel() {
                   </button>
                 </div>
 
-                {run.lifelines.phone.secondsLeft !== null && (
-                  <PhoneTimer phone={run.lifelines.phone} compact />
-                )}
+                {/* Mirrors the projector: gone once the call is over. */}
+                {run.lifelines.phone.secondsLeft !== null &&
+                  run.lifelines.phone.atIndex === run.index &&
+                  !run.lifelines.phone.hidden && (
+                    <PhoneTimer phone={run.lifelines.phone} compact />
+                  )}
 
                 {/* Ask the audience: host types the real numbers */}
                 {audience.open && (

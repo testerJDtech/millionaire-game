@@ -119,7 +119,16 @@ export function answerState({ letter, selected, phase, removed, correctAnswer })
 export function freshLifelines() {
   return {
     fifty: { used: false, removed: [], atIndex: null },
-    phone: { used: false, atIndex: null, running: false, secondsLeft: null, finished: false },
+    // `hidden` takes the countdown off both screens once the call is over,
+    // without un-spending the lifeline.
+    phone: {
+      used: false,
+      atIndex: null,
+      running: false,
+      secondsLeft: null,
+      finished: false,
+      hidden: false,
+    },
     audience: {
       used: false,
       atIndex: null,
